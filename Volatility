@@ -1,0 +1,44 @@
+#!/usr/bin/python3
+
+"""Scrapes finviz.com to get the weekly and monthly volatility percentage."""
+
+
+import argparse
+
+from bs4 import BeautifulSoup
+import requests
+
+
+def GetHTML(ticker):
+  url = 'https://finviz.com/quote.ashx?t={}&ty=c&p=d&b=1'.format(ticker)
+  resp = requests.get(url)
+  return resp.text
+
+
+def GetVolatility(html):
+  soup = BeautifulSoup(html, 'html.parser')
+  elems = soup.select('table.snapshot-table2 td')
+  vol_index = None
+  atr_index = None
+  for i, elem in enumerate(elems):
+    if elem.text.lower().strip() == 'volatility':
+      vol_index = i + 1
+    elif elem.text.lower().strip() == 'atr':
+      atr_index = i + 1
+  vol_weekly, vol_monthly = elems[vol_index].text.split()
+  atr = elems[atr_index].text
+  return vol_weekly, vol_monthly, atr
+
+
+def main(args):
+  for ticker in args.tickers:
+    html = GetHTML(ticker)
+    vol_weekly, vol_monthly, atr = GetVolatility(html)
+    print('{}\tVW:{} VM:{} ATR:{}'.format(ticker, vol_weekly, vol_monthly, atr))
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('tickers', nargs='+')
+  args = parser.parse_args()
+  main(args)
