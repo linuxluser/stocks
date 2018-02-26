@@ -1,0 +1,38 @@
+#!/usr/bin/python3
+
+
+import json
+import requests
+
+
+APIKEY = ''  # go to https://www.alphavantage.co/support/ for your API KEY
+SECTION_ORDER = ['5 Day', '1 Month', '3 Month', 'Year-to-Date']
+
+
+def GetSectorPerformances():
+  url_fmt = 'https://www.alphavantage.co/query?function=SECTOR&apikey={}'
+  url = url_fmt.format(APIKEY)
+  response = requests.get(url)
+  return response.json()
+
+
+def main():
+  perf = GetSectorPerformances()
+  for section in SECTION_ORDER:
+    keys = [key for key in perf.keys() if section.lower() in key.lower()]
+    if keys:
+      data = [(float(v.rstrip('%')), k) for k,v in perf[keys[0]].items()]
+      data.sort(reverse=True)
+      print('+' + '='*58 + '+')
+      print('| ' + (section + ' Performance').center(56) + ' |')
+      print('+' + '-'*58 + '+')
+      width = max([len(s) for _,s in data])
+      for percent,sector in data:
+        info = sector.rjust(width) + ':  %.2f%%' % percent
+        print('|', info, '|'.rjust(57-len(info)))
+      print('+' + '-'*58 + '+')
+      print()
+
+
+if __name__ == '__main__':
+  main()
