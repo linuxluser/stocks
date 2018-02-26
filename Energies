@@ -1,0 +1,396 @@
+#!/usr/bin/env python3
+
+"""
+"""
+
+
+import argparse
+import datetime
+import os
+import tempfile
+import time
+
+import numpy as np
+import pandas as pd
+import pandas_datareader as pdr
+from pandas_datareader._utils import RemoteDataError
+from scipy import signal
+
+
+# Time offset
+UTC_OFFSET = -8  # PST timezone
+
+# Takes into account unprintable characters
+# NOTE: add 10 more characters per color+reset combo you add
+LINE_FORMAT = '{0: <18}{1: <21}{2: <26}{3: <22}{4: <21}{5: <23}{6: <26}'
+
+UP_ARROW = '\u2b06'
+DOWN_ARROW = '\u2b07'
+
+
+class Colors():
+  """Colors for printing.
+
+  The color values must be the same number of characters long so that way they
+  are known to LINE_FORMAT's various padding lengths.
+  """
+  RESET      = '\033[00m'
+  BOLD       = '\033[01m'
+  UNDERLINE  = '\033[04m'
+  BLACK      = '\033[30m'
+  RED        = '\033[31m'
+  GREEN      = '\033[32m'
+  YELLOW     = '\033[33m'
+  BLUE       = '\033[34m'
+  MAGENTA    = '\033[35m'
+  CYAN       = '\033[36m'
+  LT_GRAY    = '\033[37m'
+  DK_GRAY    = '\033[38m'
+  LT_RED     = '\033[91m'
+  LT_GREEN   = '\033[92m'
+  LT_YELLOW  = '\033[93m'
+  LT_BLUE    = '\033[94m'
+  LT_MAGENTA = '\033[95m'
+  LT_CYAN    = '\033[96m'
+  BG_RED     = '\033[41m'
+  BG_GREEN   = '\033[42m'
+  BG_YELLOW  = '\033[43m'
+  BG_BLUE    = '\033[44m'
+  BG_MAGENTA = '\033[45m'
+  BG_CYAN    = '\033[46m'
+
+  @staticmethod
+  def Paint(S, color):
+    return '{}{}{}'.format(color, S, Colors.RESET)
+
+  PaintBold = staticmethod(lambda S: Colors.Paint(S, Colors.BOLD))
+  PaintUnderline = staticmethod(lambda S: Colors.Paint(S, Colors.UNDERLINE))
+  PaintRed = staticmethod(lambda S: Colors.Paint(S, Colors.RED))
+  PaintGreen = staticmethod(lambda S: Colors.Paint(S, Colors.GREEN))
+  PaintYellow = staticmethod(lambda S: Colors.Paint(S, Colors.YELLOW))
+  PaintBlue = staticmethod(lambda S: Colors.Paint(S, Colors.BLUE))
+  PaintMagenta = staticmethod(lambda S: Colors.Paint(S, Colors.MAGENTA))
+  PaintCyan = staticmethod(lambda S: Colors.Paint(S, Colors.CYAN))
+  PaintLightRed = staticmethod(lambda S: Colors.Paint(S, Colors.LT_RED))
+  PaintLightGreen = staticmethod(lambda S: Colors.Paint(S, Colors.LT_GREEN))
+  PaintLightYellow = staticmethod(lambda S: Colors.Paint(S, Colors.LT_YELLOW))
+  PaintLightBlue = staticmethod(lambda S: Colors.Paint(S, Colors.LT_BLUE))
+  PaintLightMagenta = staticmethod(lambda S: Colors.Paint(S, Colors.LT_MAGENTA))
+  PaintLightCyan = staticmethod(lambda S: Colors.Paint(S, Colors.LT_CYAN))
+  PaintBackgroundRed = staticmethod(lambda S: Colors.Paint(S, Colors.BG_RED))
+  PaintBackgroundGreen = staticmethod(lambda S: Colors.Paint(S, Colors.BG_GREEN))
+  PaintBackgroundYellow = staticmethod(lambda S: Colors.Paint(S, Colors.BG_YELLOW))
+  PaintBackgroundBlue = staticmethod(lambda S: Colors.Paint(S, Colors.BG_BLUE))
+  PaintBackgroundMagenta = staticmethod(lambda S: Colors.Paint(S, Colors.BG_MAGENTA))
+  PaintBackgroundCyan = staticmethod(lambda S: Colors.Paint(S, Colors.BG_CYAN))
+
+
+class DataFetcher(object):
+
+  def __init__(self):
+    self.tmp_dir = '/tmp/_stock_data_cache_'
+    if not os.path.exists(self.tmp_dir):
+      os.mkdir(self.tmp_dir)
+
+  def _MinutesInMarket(self, dt):
+    """Provide the number of minutes this datetime object falls within market hours.
+
+    0 if it falls outside of market hours.
+    """
+    # Batteries NOT included: we have to make our own class to represent the timezone
+    class TZInfo(datetime.tzinfo):
+      utcoffset = lambda self, dt: datetime.timedelta(hours=UTC_OFFSET)
+      dst = lambda self, dt: datetime.timedelta(0)
+      tzname = lambda self, dt: '{:+03d}00'.format(UTC_OFFSET)
+
+    # Use our custom tzinfo class if none exists for dt
+    if dt.tzinfo == None:
+      dt = dt.replace(tzinfo=TZInfo())
+
+    # Convert to UTC
+    utc_dt = dt.astimezone(datetime.timezone.utc)
+
+    # Closed on weekends
+    saturday, sunday = 5, 6
+    if utc_dt.weekday() in (saturday, sunday):
+      return 0, 0
+
+    open_time = datetime.time(14, 30)  # NYSE in UTC
+    closed_time = datetime.time(21, 00)  # NYSE in UTC
+    t = utc_dt.time()
+    if t < open_time or t > closed_time:
+      return 0, 0
+
+    open_m = (open_time.hour * 60) + open_time.minute
+    closed_m = (closed_time.hour * 60) + closed_time.minute
+    t_m = (t.hour * 60) + t.minute
+    since_open_m = t_m - open_m
+    before_close_m = closed_m - t_m
+    return since_open_m, before_close_m
+
+  def _IsMarketClosed(self, ticker):
+    since, before = self._MinutesInMarket(datetime.datetime.now(datetime.timezone.utc))
+    return since == before == 0
+
+  def _FileTimeDuringMarketOpen(self, file_time):
+    since, before = self._MinutesInMarket(datetime.datetime.fromtimestamp(file_time))
+    return (since, before) != (0, 0)
+
+  def _IsDataFileStale(self, ticker, data_file):
+    if not os.path.exists(data_file):
+      return True
+    file_time = os.path.getmtime(data_file)
+    if self._IsMarketClosed(ticker):
+      return self._FileTimeDuringMarketOpen(file_time)
+    else:
+      file_age = time.time() - file_time
+      return file_age > 300
+
+  def FetchData(self, ticker):
+    data_file = os.path.join(self.tmp_dir, ticker)
+    if self._IsDataFileStale(ticker, data_file):
+      df = None
+      while df is None:
+        try:
+          df = pdr.data.DataReader(ticker, 'yahoo')
+        except RemoteDataError:
+          time.sleep(0.5)
+      df.to_pickle(data_file)
+    else:
+      df = pd.read_pickle(data_file)
+    return df
+
+
+class PivotPoints(object):
+  """Container class to hold pivot points."""
+
+
+def Extrema(df, period):
+  maxima = signal.argrelextrema(df.values, np.greater)
+  minima = signal.argrelextrema(df.values, np.less)
+
+
+def SMA(df, period):
+  return df['Close'].rolling(window=period).mean()
+
+
+def EMA(df, period):
+  return df['Close'].ewm(span=period).mean()
+
+
+def Stoch(df, period_k, period_d, smoothing):
+  high, low, close = df['High'], df['Low'], df['Close']
+  lowest_low = low.rolling(period_k).min()
+  highest_high = high.rolling(period_k).max()
+  fast_k = 100 * (close - lowest_low) / (highest_high - lowest_low)
+  fast_d = fast_k.rolling(smoothing).mean()
+  slow_k = fast_d
+  slow_d = slow_k.rolling(period_d).mean()
+  return slow_k, slow_d
+
+
+def MACD(df, fast_length, slow_length, smoothing):
+  fast = EMA(df, fast_length)
+  slow = EMA(df, slow_length)
+  macd = fast - slow
+  signal = macd.ewm(span=smoothing).mean()
+  histogram = macd - signal
+  return macd, signal, histogram
+
+
+def TrendAnalysis(series, smoothing):
+  # Get differences, smoothing them out to avoid insignificant "wiggles"
+  change = series.diff().rolling(window=smoothing).mean()
+
+  # Find the direction changes and get the current direction count
+  signs = list(reversed(np.sign(change).values))
+  direction = signs[0]  # current direction
+  periods = 1
+  for sign in signs[1:]:
+    if sign != direction: break
+    periods += 1
+
+  # Sum the total change seen for the number of periods
+  total_change = abs(sum(list(series.values)[:periods]))
+
+  return direction, periods, total_change
+
+
+def EnergyOfTrend(df):
+  df['SMA50'] = SMA(df, 50)
+  return TrendAnalysis(df['SMA50'], 1)
+
+
+def ReportEnergyOfTrend(direction, count, total_change):
+  arrow = Colors.PaintGreen(UP_ARROW)
+  if direction < 0:
+    arrow = Colors.PaintRed(DOWN_ARROW)
+  return '{} [t={}d]'.format(arrow, count)
+
+
+def EnergyOfMomentum(df):
+  df['MACD'], _, _ = MACD(df, 12, 26, 9)
+  return df
+
+
+def ReportEnergyOfMomentum(df):
+  macd_val = df['MACD'].iloc[-1]
+  direction, count, _ = TrendAnalysis(df['MACD'], 2)
+  arrow = UP_ARROW
+  if direction < 0:
+    arrow = DOWN_ARROW
+  macd = Colors.PaintGreen('{:.2f}'.format(macd_val))
+  if macd_val < 0:
+    macd = Colors.PaintRed('{:.2f}'.format(macd_val))
+  return '{} [macd={}]'.format(arrow, macd)
+
+
+def EnergyOfCycle(df):
+  df['StochK'], _ = Stoch(df, 5, 3, 2)
+  direction, _, _ = TrendAnalysis(df['StochK'], 2)
+  return direction, df['StochK'].iloc[-1]
+
+
+def ReportEnergyOfCycle(direction, k):
+  arrow = UP_ARROW
+  if direction < 0:
+    arrow = DOWN_ARROW
+  color = Colors.YELLOW
+  if k >= 80:
+    color = Colors.RED
+  elif k <= 20:
+    color = Colors.GREEN
+  return '{} [k={}{:.1f}{}]'.format(arrow, color, k, Colors.RESET)
+
+
+def EnergyOfScale(orig_df, timeframe='W'):
+  # Resample data to get longer time frame
+  orig_df.index = pd.to_datetime(orig_df.index)
+  df = orig_df.resample(timeframe).agg(
+                            {'Open':   lambda x: x[0],  # take first
+                             'High':   'max',
+                             'Low':    'min',
+                             'Close':  lambda x: x[-1], # take last
+                             'Volume': 'sum'},
+                        loffset=pd.offsets.timedelta(days=-6))  # to put the labels to Monday
+
+  # Get the MACD of the new timeframe
+  df['MACD'], _, _ = MACD(df, 12, 26, 9)
+
+  return TrendAnalysis(df['MACD'], 2)
+
+
+def ReportEnergyOfScale(direction, count, total_change):
+  arrow = Colors.PaintGreen(UP_ARROW)
+  if direction < 0:
+    arrow = Colors.PaintRed(DOWN_ARROW)
+  return '{} [t={:d}w]'.format(arrow, count)
+
+
+def Volatility(df):
+  return (df['Close'].pct_change().tail(5).std() * 100,
+          df['Close'].pct_change().tail(21).std() * 100)
+
+
+def ReportVolatility(wVol, mVol):
+  arrow = UP_ARROW
+  if wVol < mVol:
+    arrow = DOWN_ARROW
+  color = Colors.GREEN
+  if wVol > 3 and wVol < 5:
+    color = Colors.YELLOW
+  elif wVol >= 5:
+    color = Colors.RED
+  return '{} [w={}{:.2f}%{}]'.format(arrow, color, wVol, Colors.RESET)
+
+
+def CalculatePivotPoints(incoming_df):
+  this_month = int(incoming_df.tail(1).index.month[0])
+  year = int(incoming_df.tail(1).index.year[0])
+  last_month = ((this_month - 2) % 12) + 1
+  if last_month > this_month:
+    year = year - 1
+
+  df = incoming_df.loc[(incoming_df.index.month == last_month) & (incoming_df.index.year == year)]
+  low = float(df.Low.min())
+  high = float(df.High.max())
+  close = float(df.tail(1).Close[0])
+  pp = (high + low + close) / 3
+  r1 = 2*pp - low
+  s1 = 2*pp - high
+  r2 = pp + (high - low)
+  s2 = pp - (high - low)
+  r3 = high + 2*(pp - low)
+  s3 = low - 2*(high - pp)
+
+  last_close = float(incoming_df.tail(1).Close)
+  p = PivotPoints()
+  p.pp, p.r1, p.s1, p.r2, p.s2, p.r3, p.s3 = pp, r1, s1, r2, s2, r3, s3
+  return p, last_close
+
+
+def ReportPivotPoints(ppoints, close):
+  # Pivot points are ordered and colored statically
+  strs = [Colors.PaintRed('{:.2f}'.format(ppoints.s3)),
+          Colors.PaintLightRed('{:.2f}'.format(ppoints.s2)),
+          Colors.PaintYellow('{:.2f}'.format(ppoints.s1)),
+          '{:.2f}'.format(ppoints.pp),
+          Colors.PaintCyan('{:.2f}'.format(ppoints.r1)),
+          Colors.PaintBlue('{:.2f}'.format(ppoints.r2)),
+          Colors.PaintMagenta('{:.2f}'.format(ppoints.r3))]
+
+
+  # Colors the 'close' value according to its place in the index
+  close_colorizer = {0: Colors.PaintBackgroundRed,
+                     1: Colors.PaintBackgroundRed,
+                     2: Colors.PaintBackgroundYellow,
+                     3: Colors.PaintBackgroundYellow,
+                     4: Colors.PaintBackgroundCyan,
+                     5: Colors.PaintBackgroundBlue,
+                     6: Colors.PaintBackgroundMagenta,
+                     7: Colors.PaintBackgroundMagenta}
+
+  # Find the index where the 'close' value belongs so we can insert it with the other strings
+  vals = [ppoints.r3, ppoints.r2, ppoints.r1, ppoints.pp, ppoints.s1, ppoints.s2, ppoints.s3, close]
+  vals.sort()
+  close_index = vals.index(close)
+
+  # Finally, color and insert the 'close' value appropriately
+  strs.insert(close_index, close_colorizer[close_index]('{:.2f}'.format(close)))
+
+  return '[{} {} {} {} {} {} {} {}]'.format(*tuple(strs))
+
+
+def main(args):
+  # Print header
+  print(LINE_FORMAT.format(*(Colors.PaintUnderline('TICKER'),
+                             Colors.PaintUnderline('TREND'),
+                             Colors.PaintUnderline('MOMENTUM'),
+                             Colors.PaintUnderline('CYCLE'),
+                             Colors.PaintUnderline('SCALE'),
+                             Colors.PaintUnderline('VOLATILITY'),
+                             Colors.PaintUnderline('PIVOT POINTS'))))
+
+  for ticker in args.tickers:
+    df = DataFetcher().FetchData(ticker)
+    trend = ReportEnergyOfTrend(*EnergyOfTrend(df))
+    momentum = ReportEnergyOfMomentum(EnergyOfMomentum(df))
+    cycle = ReportEnergyOfCycle(*EnergyOfCycle(df))
+    scale = ReportEnergyOfScale(*EnergyOfScale(df))
+    volatility = ReportVolatility(*Volatility(df))
+    pivotpoints = ReportPivotPoints(*CalculatePivotPoints(df))
+    print(LINE_FORMAT.format(Colors.PaintCyan(ticker),
+                             trend,
+                             momentum,
+                             cycle,
+                             scale,
+                             volatility,
+                             pivotpoints))
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('tickers', nargs='+')
+  parser.add_argument('--filter', '-f', nargs='*')
+  args = parser.parse_args()
+  main(args)
