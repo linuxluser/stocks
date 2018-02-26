@@ -1,0 +1,47 @@
+#!/usr/bin/python3
+# 
+# Shows indicators, scores them or filters them based on "The Perfect Setup"
+# as given by "The 5 Secrets To Highly Profitable Swing Trading" by Ivaylo Ivanov.
+# 
+# 
+# [ The "Perfect" Setup ]
+# Previous uptrend
+# Near 10-day high (within 3% of it)
+# High relative strength on weekly, monthly, quarterly or half year basis
+# Tight side-ways consolidation on below average volume, lasting anywhere between 2 and 20 trading days.
+# The closing prices of the past few trading days are very near to each other
+# Coiled near its 5, 10 or 20-day moving average
+# Trading above its 5-day moving average
+# 5-day moving average is above its 20-day moving average
+# 
+# 
+# [ Good Potential ]
+# Up >10% over week
+# Up >20% over month (or >10% for large cap)
+# Up >30% over quarter (or >20% for large cap)
+# Up >40% over 6 months (or >30% for large cap)
+# 
+# 
+# [ Breakout Setup ]
+# Low-volume range contraction (2 to 20 days)
+# Up from the open >2%
+# Daily change >2%
+# New 10-day high
+# 5-day MA >20-day MA
+# Price is above its 5-day MA
+# Average daily volume >50k
+# Relative volume >1
+# Price >2
+# Set stop at the lows of the 2% breakout day
+# 
+#
+# [ Anticipation Setup (i.e. buying early for a breakout) ]
+# Works only in strong up-trending markets, where most setups eventually break out
+# May not trigger immediately
+# Be aware of strongest industries in the market at the time
+# 
+# 
+# [Don't Buy If ...]
+# ... there is no range contraction
+# ... the stock is already up 3-4 days in a row
+
