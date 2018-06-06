@@ -18,7 +18,7 @@ from scipy import signal
 
 
 # Time offset
-UTC_OFFSET = -8  # PST timezone
+UTC_OFFSET = -7  # PST timezone
 
 # Takes into account unprintable characters
 # NOTE: add 10 more characters per color+reset combo you add
