@@ -24,8 +24,8 @@ UTC_OFFSET = -7  # PST timezone
 # NOTE: add 10 more characters per color+reset combo you add
 LINE_FORMAT = '{0: <18}{1: <21}{2: <26}{3: <22}{4: <21}{5: <23}{6: <26}'
 
-UP_ARROW = '\u2b06'
-DOWN_ARROW = '\u2b07'
+UP_ARROW = '\u25b2'
+DOWN_ARROW = '\u25bc'
 
 # Data-source-specific constants
 DATA_SOURCE = 'yahoo'
