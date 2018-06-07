@@ -58,10 +58,15 @@ class Colors():
   BG_BLUE    = '\033[44m'
   BG_MAGENTA = '\033[45m'
   BG_CYAN    = '\033[46m'
+  BG_WHITE   = '\033[107m'
 
   @staticmethod
   def Paint(S, color):
     return '{}{}{}'.format(color, S, Colors.RESET)
+
+  @staticmethod
+  def PaintForegroundBackground(S, fg_color, bg_color):
+    return '{}{}{}{}'.format(fg_color, bg_color, S, Colors.RESET)
 
   PaintBold = staticmethod(lambda S: Colors.Paint(S, Colors.BOLD))
   PaintUnderline = staticmethod(lambda S: Colors.Paint(S, Colors.UNDERLINE))
@@ -83,6 +88,9 @@ class Colors():
   PaintBackgroundBlue = staticmethod(lambda S: Colors.Paint(S, Colors.BG_BLUE))
   PaintBackgroundMagenta = staticmethod(lambda S: Colors.Paint(S, Colors.BG_MAGENTA))
   PaintBackgroundCyan = staticmethod(lambda S: Colors.Paint(S, Colors.BG_CYAN))
+
+  # Text/background combos
+  PaintBlackOnWhite = staticmethod(lambda S: Colors.PaintForegroundBackground(S, Colors.BLACK, Colors.BG_WHITE))
 
 
 class DataFetcher(object):
@@ -343,11 +351,11 @@ def ReportPivotPoints(ppoints, close):
   # Colors the 'close' value according to its place in the index
   close_colorizer = {0: Colors.PaintBackgroundRed,
                      1: Colors.PaintBackgroundRed,
-                     2: Colors.PaintBackgroundYellow,
+                     2: Colors.PaintBackgroundRed,
                      3: Colors.PaintBackgroundYellow,
-                     4: Colors.PaintBackgroundCyan,
-                     5: Colors.PaintBackgroundBlue,
-                     6: Colors.PaintBackgroundMagenta,
+                     4: Colors.PaintBlackOnWhite,
+                     5: Colors.PaintBackgroundCyan,
+                     6: Colors.PaintBackgroundBlue,
                      7: Colors.PaintBackgroundMagenta}
 
   # Find the index where the 'close' value belongs so we can insert it with the other strings
