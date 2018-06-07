@@ -359,8 +359,8 @@ def ReportPivotPoints(ppoints, close):
   # Colors the 'close' value according to its place in the index
   close_colorizer = {0: Colors.PaintBackgroundRed,
                      1: Colors.PaintBackgroundRed,
-                     2: Colors.PaintBackgroundRed,
-                     3: Colors.PaintBackgroundYellow,
+                     2: Colors.PaintBackgroundYellow,
+                     3: Colors.PaintBlackOnWhite,
                      4: Colors.PaintBlackOnWhite,
                      5: Colors.PaintBackgroundCyan,
                      6: Colors.PaintBackgroundBlue,
