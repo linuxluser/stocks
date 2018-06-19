@@ -284,13 +284,13 @@ if __name__ == '__main__':
   subcommands = parser.add_subparsers(title='Subcommands', dest='command')
 
   # buy
-  parser_buy = subcommands.add_parser('buy', help='Buy a stock')
+  parser_buy = subcommands.add_parser('buy', aliases=['b'], help='Buy a stock')
   parser_buy.add_argument('ticker')
   parser_buy.add_argument('amount', type=int)
   parser_buy.add_argument('price', type=float)
 
   # sell
-  parser_sell = subcommands.add_parser('sell', help='Sell a stock')
+  parser_sell = subcommands.add_parser('sell', aliases=['s'], help='Sell a stock')
   parser_sell.add_argument('ticker')
   parser_sell.add_argument('amount', type=int)
   parser_sell.add_argument('price', type=float)
@@ -299,7 +299,7 @@ if __name__ == '__main__':
   parser_positions = subcommands.add_parser('positions', help='Display current positions')
 
   # watch
-  parser_watch = subcommands.add_parser('watch', help='Add stocks to the watch list')
+  parser_watch = subcommands.add_parser('watch', aliases=['w'], help='Add stocks to the watch list')
   parser_watch.add_argument('tickers', nargs='+', type=valid_ticker)
   parser_watch.add_argument('-n', '--note', help='')
 
@@ -314,7 +314,7 @@ if __name__ == '__main__':
   parser_history = subcommands.add_parser('history', help='Display the history')
 
   # pick
-  parser_pick = subcommands.add_parser('pick', help='Add stocks to the picklist')
+  parser_pick = subcommands.add_parser('pick', aliases=['p'], help='Add stocks to the picklist')
   parser_pick.add_argument('tickers', nargs='+', type=valid_ticker)
   parser_pick.add_argument('-n', '--note', help='')
 
@@ -331,4 +331,9 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.command == None:
     args.command = 'today'
+  elif args.command in ('b', 's', 'w', 'p'):
+    args.command = {'b': 'buy',
+                    's': 'sell',
+                    'w': 'watch',
+                    'p': 'pick'}[args.command]
   main(args)
