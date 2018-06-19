@@ -210,10 +210,12 @@ class CommandDispatcher(object):
   def buy(self, ticker, count, price, **ignored):
     self.datastore.add_buy(ticker, count, price)
     self._print_ticker_summary(ticker)
+  b = buy  # to respond to alias
 
   def sell(self, ticker, count, price, **ignored):
     self.datastore.add_sell(ticker, count, price)
     self._print_ticker_summary(ticker)
+  s = sell  # to respond to alias
 
   def positions(self, **ignored):
     self._print_current_positions()
@@ -222,6 +224,7 @@ class CommandDispatcher(object):
     for ticker in tickers:
       self.datastore.add_to_watchlist(ticker, note)
     self._print_watchlist(tickers)
+  w = watch  # to respond to alias
 
   def unwatch(self, tickers, **ignored):
     for ticker in tickers:
@@ -235,6 +238,7 @@ class CommandDispatcher(object):
     for ticker in tickers:
       self.datastore.add_to_picklist(ticker, note)
     self._print_picklist(tickers)
+  p = pick  # to respond to alias
 
   def unpick(self, tickers, **ignored):
     for ticker in tickers:
@@ -343,9 +347,4 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.command == None:
     args.command = 'today'
-  elif args.command in ('b', 's', 'w', 'p'):
-    args.command = {'b': 'buy',
-                    's': 'sell',
-                    'w': 'watch',
-                    'p': 'pick'}[args.command]
   main(args)
