@@ -12,6 +12,10 @@ import pandas_datareader as pdr
 from pandas_datareader._utils import RemoteDataError
 
 
+# Time offset
+UTC_OFFSET = -7  # PST timezone
+
+
 class DataSource(object):
   """Holds data-source-specific constants."""
 
@@ -21,8 +25,6 @@ class DataSource(object):
   HIGH   = 'High'
   LOW    = 'Low'
   VOLUME = 'Volume'
-
-
 
 
 class DataFetcher(object):
