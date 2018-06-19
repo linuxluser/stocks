@@ -22,6 +22,7 @@ import dbm
 import os
 import pathlib
 import shelve
+import string
 import sys
 import time
 
@@ -30,6 +31,10 @@ from sh import at
 
 class Error(Exception):
   """Base error class."""
+
+
+class BadTickerFormError(Error):
+  """Ticker is not in correct form."""
 
 
 class EntryExistsError(Error):
@@ -136,28 +141,32 @@ class Datastore(object):
   def positions(self, **ignored):
     self._print_current_positions()
 
-  def watch(self, ticker, note, **ignored):
-    self._add_history_record(ticker, 'watch', note)
-    self._add_to_watchlist(ticker, note)
-    self._print_watchlist(highlight=ticker)
+  def watch(self, tickers, note='', **ignored):
+    for ticker in tickers:
+      self._add_history_record(ticker, 'watch', note)
+      self._add_to_watchlist(ticker, note)
+    self._print_watchlist(tickers)
 
-  def unwatch(self, ticker, **ignored):
-    self._add_history_record(ticker, 'unwatch')
-    self._remove_from_watchlist(ticker)
+  def unwatch(self, tickers, **ignored):
+    for ticker in tickers:
+      self._add_history_record(ticker, 'unwatch')
+      self._remove_from_watchlist(ticker)
     self._print_watchlist()
 
   def watchlist(self, **ignored):
     self._print_watchlist()
 
-  def pick(self, ticker, note, **ignored):
-    self._add_history_record(ticker, 'pick', note)
-    self._add_to_picklist(ticker, note)
-    self._remove_from_picklist_in_future(ticker, 24)
-    self._print_picklist(ticker)
+  def pick(self, tickers, note='', **ignored):
+    for ticker in tickers:
+      self._add_history_record(ticker, 'pick', note)
+      self._add_to_picklist(ticker, note)
+      self._remove_from_picklist_in_future(ticker, 24)
+    self._print_picklist(tickers)
 
-  def unpick(self, ticker, **ignored):
-    self._add_history_record(ticker, 'unpick')
-    self._remove_from_picklist(ticker)
+  def unpick(self, tickers, **ignored):
+    for ticker in tickers:
+      self._add_history_record(ticker, 'unpick')
+      self._remove_from_picklist(ticker)
     self._print_picklist()
 
   def picklist(self, **ignored):
@@ -192,17 +201,32 @@ class Datastore(object):
       else:
         print(S)
 
-  def _print_watchlist(self, highlight=None):
-    return self._print_anylist('watch', highlight or [])
+  def _print_watchlist(self, highlights=[]):
+    return self._print_anylist('watch', highlights)
 
-  def _print_picklist(self, highlight=None):
-    return self._print_anylist('pick', highlight or [])
+  def _print_picklist(self, highlights=[]):
+    return self._print_anylist('pick', highlights)
 
   def _print_history(self):
     for ticker,recs in self._get_history().items():
       for rec in recs:
         tt = rec[0]
         print('{}\t{}'.format(ticker, rec))
+
+
+def is_ticker(ticker):
+  return all(c in string.ascii_uppercase for c in ticker)
+
+
+def valid_ticker(ticker):
+  """Determines if this string is a valid ticker and throw an exception if not.
+
+  This is used as the type= argument to some argparse args as a quick and
+  dirty way to validate arguments.
+  """
+  if not is_ticker(ticker):
+    raise BadTickerFormError('"{}" is not a ticker'.format(ticker))
+  return ticker
 
 
 def now_tuple():
@@ -250,13 +274,13 @@ if __name__ == '__main__':
   parser_positions = subcommands.add_parser('positions', help='Display current positions')
 
   # watch
-  parser_watch = subcommands.add_parser('watch', help='Add a stock to the watch list')
-  parser_watch.add_argument('ticker')
-  parser_watch.add_argument('note', help='Tell why you are watching this stock')
+  parser_watch = subcommands.add_parser('watch', help='Add stocks to the watch list')
+  parser_watch.add_argument('tickers', nargs='+', type=valid_ticker)
+  parser_watch.add_argument('-n', '--note', help='')
 
   # unwatch
   parser_unwatch = subcommands.add_parser('unwatch', help='Remove a stock from the watch list')
-  parser_unwatch.add_argument('ticker')
+  parser_unwatch.add_argument('tickers', nargs='+', type=valid_ticker)
 
   # watchlist
   parser_watchlist = subcommands.add_parser('watchlist', help='Display the watch list')
@@ -265,13 +289,13 @@ if __name__ == '__main__':
   parser_history = subcommands.add_parser('history', help='Display the history')
 
   # pick
-  parser_pick = subcommands.add_parser('pick', help='Add a stock to the picklist')
-  parser_pick.add_argument('ticker')
-  parser_pick.add_argument('note', help='Tell why you picked this stock')
+  parser_pick = subcommands.add_parser('pick', help='Add stocks to the picklist')
+  parser_pick.add_argument('tickers', nargs='+', type=valid_ticker)
+  parser_pick.add_argument('-n', '--note', help='')
 
   # unpick
   parser_unpick = subcommands.add_parser('unpick', help='Remove a stock from the watch list')
-  parser_unpick.add_argument('ticker')
+  parser_unpick.add_argument('tickers', nargs='+', type=valid_ticker)
 
   # picklist
   parser_picklist = subcommands.add_parser('picklist', help='Display the pick list')
