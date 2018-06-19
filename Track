@@ -67,7 +67,7 @@ class Datastore(object):
 
     # define getters that return dict copies of the databases
     for db in databases:
-      setattr(self, '_get_{}'.format(db), self.__make_getter(db))
+      setattr(self, 'get_{}'.format(db), self.__make_getter(db))
 
   def __make_getter(self, db):
     """Makes a getter method for a specific database."""
@@ -85,49 +85,6 @@ class Datastore(object):
       else:
         history[ticker] += [record]
 
-  def _add_position(self, sale, ticker, amount, price):
-    with shelve.open(self._positions_file) as positions:
-      p = positions.setdefault(ticker, {'buys': [], 'sells': []})
-      p[sale].append((amount, price))
-      positions[ticker] = p
-
-  def _get_ticker_position_summary(self, ticker):
-    with shelve.open(self._positions_file) as positions:
-      pos = positions[ticker]
-      return self._calc_position_summary(ticker, pos)
-
-  def _calc_position_summary(self, ticker, pos):
-    bought = sum(a for a,_ in pos['buys'])
-    sold = sum(a for a,_ in pos['sells'])
-    holding = bought - sold
-    avg = sum(p for _,p in pos['buys'])/len(pos['buys'])
-    return {'holding': holding, 'average_price': avg, 'bought': bought, 'sold': sold}
-
-  def _add_to_watchlist(self, ticker, note):
-    with shelve.open(self._watchlist_file) as watchlist:
-      if ticker in watchlist:
-        raise EntryExistsError('{} already in watchlist'.format(ticker))
-      watchlist[ticker] = {'note': note, 'timestamp': now_tuple()}
-
-  def _remove_from_watchlist(self, ticker):
-    with shelve.open(self._watchlist_file) as watchlist:
-      if ticker not in watchlist:
-        raise EntryDoesNotExistError('{} not in watchlist'.format(ticker))
-      del watchlist[ticker]
-
-  def _add_to_picklist(self, ticker, note, at_job_id):
-    with shelve.open(self._picklist_file) as picklist:
-      if ticker in picklist:
-        raise EntryExistsError('{} already in picklist'.format(ticker))
-      picklist[ticker] = {'note': note, 'at_job_id': at_job_id, 'timestamp': now_tuple()}
-
-  def _remove_from_picklist(self, ticker):
-    with shelve.open(self._picklist_file) as picklist:
-      if ticker not in picklist:
-        raise EntryDoesNotExistError('{} not in picklist'.format(ticker))
-      self._cancel_future_removal_from_picklist(picklist[ticker]['at_job_id'])
-      del picklist[ticker]
-
   def _remove_from_picklist_in_future(self, ticker, hours):
     """Use the system 'at' command to run 'unpick' at a future time."""
     job_id = None
@@ -143,55 +100,67 @@ class Datastore(object):
   def _cancel_future_removal_from_picklist(self, at_job_id):
     atrm(at_job_id)
 
-  def buy(self, ticker, amount, price, **ignored):
-    self._add_history_record(ticker, 'buy', amount, price)
-    self._add_position('buys', ticker, amount, price)
-    self._print_ticker_summary(ticker)
+  def _add_position(self, sale_type, ticker, count, price):
+    with shelve.open(self._positions_file) as positions:
+      p = positions.setdefault(ticker, {'buys': [], 'sells': []})
+      p[sale_type + 's'].append((count, price))
+      positions[ticker] = p
+    self._add_history_record(ticker, sale_type, count, price)
 
-  def sell(self, ticker, amount, price, **ignored):
-    self._add_history_record(ticker, 'sell', amount, price)
-    self._add_position('sells', ticker, amount, price)
-    self._print_ticker_summary(ticker)
+  def add_buy(ticker, count, price):
+    self._add_position('buy', ticker, count, price)
 
-  def positions(self, **ignored):
-    self._print_current_positions()
+  def add_sell(ticker, count, price):
+    self._add_position('sell', ticker, count, price)
 
-  def watch(self, tickers, note='', **ignored):
-    for ticker in tickers:
-      self._add_history_record(ticker, 'watch', note)
-      self._add_to_watchlist(ticker, note)
-    self._print_watchlist(tickers)
+  def get_ticker_position_summary(self, ticker):
+    with shelve.open(self._positions_file) as positions:
+      pos = positions[ticker]
+      return self._calc_position_summary(ticker, pos)
 
-  def unwatch(self, tickers, **ignored):
-    for ticker in tickers:
-      self._add_history_record(ticker, 'unwatch')
-      self._remove_from_watchlist(ticker)
-    self._print_watchlist()
+  def calc_position_summary(self, ticker, pos):
+    bought = sum(a for a,_ in pos['buys'])
+    sold = sum(a for a,_ in pos['sells'])
+    holding = bought - sold
+    avg = sum(p for _,p in pos['buys'])/len(pos['buys'])
+    return {'holding': holding, 'average_price': avg, 'bought': bought, 'sold': sold}
 
-  def watchlist(self, **ignored):
-    self._print_watchlist()
+  def add_to_watchlist(self, ticker, note):
+    with shelve.open(self._watchlist_file) as watchlist:
+      if ticker in watchlist:
+        raise EntryExistsError('{} already in watchlist'.format(ticker))
+      watchlist[ticker] = {'note': note, 'timestamp': now_tuple()}
+    self._add_history_record(ticker, 'watch', note)
 
-  def pick(self, tickers, note='', **ignored):
-    for ticker in tickers:
-      self._add_history_record(ticker, 'pick', note)
+  def remove_from_watchlist(self, ticker):
+    with shelve.open(self._watchlist_file) as watchlist:
+      if ticker not in watchlist:
+        raise EntryDoesNotExistError('{} not in watchlist'.format(ticker))
+      del watchlist[ticker]
+    self._add_history_record(ticker, 'unwatch')
+
+  def add_to_picklist(self, ticker, note):
+    with shelve.open(self._picklist_file) as picklist:
+      if ticker in picklist:
+        raise EntryExistsError('{} already in picklist'.format(ticker))
       at_job_id = self._remove_from_picklist_in_future(ticker, 24)
-      self._add_to_picklist(ticker, note, at_job_id)
-    self._print_picklist(tickers)
+      picklist[ticker] = {'note': note, 'at_job_id': at_job_id, 'timestamp': now_tuple()}
+    self._add_history_record(ticker, 'pick', note)
 
-  def unpick(self, tickers, **ignored):
-    for ticker in tickers:
-      self._add_history_record(ticker, 'unpick')
-      self._remove_from_picklist(ticker)
-    self._print_picklist()
+  def remove_from_picklist(self, ticker):
+    with shelve.open(self._picklist_file) as picklist:
+      if ticker not in picklist:
+        raise EntryDoesNotExistError('{} not in picklist'.format(ticker))
+      self._cancel_future_removal_from_picklist(picklist[ticker]['at_job_id'])
+      del picklist[ticker]
+    self._add_history_record(ticker, 'unpick')
 
-  def picklist(self, **ignored):
-    self._print_picklist()
 
-  def history(self, **ignored):
-    self._print_history()
+class CommandDispatcher(object):
+  """Performs the high-level function of each subcommand."""
 
-  def today(self, **ignored):
-    self._print_todays_plan()
+  def __init__(self, datastore):
+    self.datastore = datastore
 
   def _print_summary(self, ticker, summary):
     print('{}:'.format(ticker))
@@ -199,7 +168,7 @@ class Datastore(object):
     print('bought: {bought}, sold: {sold}'.format(**summary))
 
   def _print_current_positions(self):
-    for ticker, pos in self._get_positions().items():
+    for ticker, pos in self.datastore.get_positions().items():
       summary = self._calc_position_summary(ticker, pos)
       self._print_summary(ticker, summary)
 
@@ -209,7 +178,7 @@ class Datastore(object):
 
   def _print_anylist(self, name, highlights, highlight_color):
     highlight_all = '*' in highlights
-    getter = getattr(self, '_get_{}list'.format(name))
+    getter = getattr(self.datastore, 'get_{}list'.format(name))
     items = [(i[1]['timestamp'], i) for i in getter().items()]
     items.sort(reverse=True)
     for timestamp, (ticker, data) in items:
@@ -227,7 +196,7 @@ class Datastore(object):
     return self._print_anylist('pick', highlights, highlight_color)
 
   def _print_history(self):
-    for ticker,recs in self._get_history().items():
+    for ticker,recs in self.datastore.get_history().items():
       for rec in recs:
         tt = rec[0]
         print('{}\t{}'.format(ticker, rec))
@@ -237,6 +206,49 @@ class Datastore(object):
     self._print_picklist(highlights=['*'], highlight_color=picklist_color)
     print(colors.Paint('\n----{ WATCHLIST }----', watchlist_color))
     self._print_watchlist(highlights=['*'], highlight_color=watchlist_color)
+
+  def buy(self, ticker, count, price, **ignored):
+    self.datastore.add_buy(ticker, count, price)
+    self._print_ticker_summary(ticker)
+
+  def sell(self, ticker, count, price, **ignored):
+    self.datastore.add_sell(ticker, count, price)
+    self._print_ticker_summary(ticker)
+
+  def positions(self, **ignored):
+    self._print_current_positions()
+
+  def watch(self, tickers, note='', **ignored):
+    for ticker in tickers:
+      self.datastore.add_to_watchlist(ticker, note)
+    self._print_watchlist(tickers)
+
+  def unwatch(self, tickers, **ignored):
+    for ticker in tickers:
+      self.datastore.remove_from_watchlist(ticker)
+    self._print_watchlist()
+
+  def watchlist(self, **ignored):
+    self._print_watchlist()
+
+  def pick(self, tickers, note='', **ignored):
+    for ticker in tickers:
+      self.datastore.add_to_picklist(ticker, note)
+    self._print_picklist(tickers)
+
+  def unpick(self, tickers, **ignored):
+    for ticker in tickers:
+      self.datastore.remove_from_picklist(ticker)
+    self._print_picklist()
+
+  def picklist(self, **ignored):
+    self._print_picklist()
+
+  def history(self, **ignored):
+    self._print_history()
+
+  def today(self, **ignored):
+    self._print_todays_plan()
 
 
 def is_ticker(ticker):
@@ -275,8 +287,8 @@ def timestamp_age_string(timestamp):
 
 
 def main(args):
-  datastore = Datastore()
-  getattr(datastore, args.command)(**vars(args))
+  dispatcher = CommandDispatcher(Datastore())
+  getattr(dispatcher, args.command)(**vars(args))
 
 
 if __name__ == '__main__':
