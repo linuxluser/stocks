@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+
+"""Track is a utility to track stock positions and interests.
+
+Subcommands:
+ - buy         Buy a stock
+ - sell        Sell a stock
+ - positions   Display current positions
+ - watch       Add a stock to the watch list
+ - unwatch     Remove a stock from the watch list
+ - watchlist   Display the watch list
+ - history     Display the history
+ - pick        Add a stock to the picklist
+ - unpick      Remove a stock from the watch list
+ - picklist    Display the pick list
+ - today       Show today's plan
+"""
+
+import argparse
+import datetime
+import dbm
+import os
+import pathlib
+import shelve
+import sys
+import time
+
+from sh import at
+
+
+class Error(Exception):
+  """Base error class."""
+
+
+class EntryExistsError(Error):
+  """Entry already exists."""
+
+
+class EntryDoesNotExistError(Error):
+  """Entry does not exists."""
+
+
+class Datastore(object):
+  """The local datastore of all program information."""
+
+  DEFAULT_DIRECTORY = os.path.join(str(pathlib.Path.home()), '.stock_tracker')
+
+  def __init__(self, base=DEFAULT_DIRECTORY):
+    if not os.path.exists(base):
+      os.makedirs(base)
+    databases = ('history',
+                 'watchlist',
+                 'picklist',
+                 'positions')
+
+    # set database filename attr
+    for db in databases:
+      setattr(self, '_{}_file'.format(db), os.path.join(base, db))
+
+    # define getters that return dict copies of the databases
+    for db in databases:
+      setattr(self, '_get_{}'.format(db), self.__make_getter(db))
+
+  def __make_getter(self, db):
+    """Makes a getter method for a specific database."""
+    filename = getattr(self, '_{}_file'.format(db))
+    def fn():
+      with shelve.open(filename) as db:
+        return dict(db)
+    return fn
+
+  def _add_history_record(self, ticker, *args):
+    record = (now_tuple(),) + args
+    with shelve.open(self._history_file) as history:
+      if ticker not in history:
+        history[ticker] = [record]
+      else:
+        history[ticker] += [record]
+
+  def _add_position(self, sale, ticker, amount, price):
+    with shelve.open(self._positions_file) as positions:
+      p = positions.setdefault(ticker, {'buys': [], 'sells': []})
+      p[sale].append((amount, price))
+      positions[ticker] = p
+
+  def _get_ticker_position_summary(self, ticker):
+    with shelve.open(self._positions_file) as positions:
+      pos = positions[ticker]
+      return self._calc_position_summary(ticker, pos)
+
+  def _calc_position_summary(self, ticker, pos):
+    bought = sum(a for a,_ in pos['buys'])
+    sold = sum(a for a,_ in pos['sells'])
+    holding = bought - sold
+    avg = sum(p for _,p in pos['buys'])/len(pos['buys'])
+    return {'holding': holding, 'average_price': avg, 'bought': bought, 'sold': sold}
+
+  def _add_to_watchlist(self, ticker, note):
+    with shelve.open(self._watchlist_file) as watchlist:
+      if ticker in watchlist:
+        raise EntryExistsError('{} already in watchlist'.format(ticker))
+      watchlist[ticker] = {'note': note, 'timestamp': now_tuple()}
+
+  def _remove_from_watchlist(self, ticker):
+    with shelve.open(self._watchlist_file) as watchlist:
+      if ticker not in watchlist:
+        raise EntryDoesNotExistError('{} not in watchlist'.format(ticker))
+      del watchlist[ticker]
+
+  def _add_to_picklist(self, ticker, note):
+    with shelve.open(self._picklist_file) as picklist:
+      if ticker in picklist:
+        raise EntryExistsError('{} already in picklist'.format(ticker))
+      picklist[ticker] = {'note': note, 'timestamp': now_tuple()}
+
+  def _remove_from_picklist(self, ticker):
+    with shelve.open(self._picklist_file) as picklist:
+      if ticker not in picklist:
+        raise EntryDoesNotExistError('{} not in picklist'.format(ticker))
+      del picklist[ticker]
+
+  def _remove_from_picklist_in_future(self, ticker, hours):
+    script = os.path.abspath(__file__)
+    at('now + {} hours'.format(hours), _in='{} unpick {}'.format(script, ticker))
+
+  def buy(self, ticker, amount, price, **ignored):
+    self._add_history_record(ticker, 'buy', amount, price)
+    self._add_position('buys', ticker, amount, price)
+    self._print_ticker_summary(ticker)
+
+  def sell(self, ticker, amount, price, **ignored):
+    self._add_history_record(ticker, 'sell', amount, price)
+    self._add_position('sells', ticker, amount, price)
+    self._print_ticker_summary(ticker)
+
+  def positions(self, **ignored):
+    self._print_current_positions()
+
+  def watch(self, ticker, note, **ignored):
+    self._add_history_record(ticker, 'watch', note)
+    self._add_to_watchlist(ticker, note)
+    self._print_watchlist(highlight=ticker)
+
+  def unwatch(self, ticker, **ignored):
+    self._add_history_record(ticker, 'unwatch')
+    self._remove_from_watchlist(ticker)
+    self._print_watchlist()
+
+  def watchlist(self, **ignored):
+    self._print_watchlist()
+
+  def pick(self, ticker, note, **ignored):
+    self._add_history_record(ticker, 'pick', note)
+    self._add_to_picklist(ticker, note)
+    self._remove_from_picklist_in_future(ticker, 24)
+    self._print_picklist(ticker)
+
+  def unpick(self, ticker, **ignored):
+    self._add_history_record(ticker, 'unpick')
+    self._remove_from_picklist(ticker)
+    self._print_picklist()
+
+  def picklist(self, **ignored):
+    self._print_picklist()
+
+  def history(self, **ignored):
+    self._print_history()
+
+  def _print_summary(self, ticker, summary):
+    print('{}:'.format(ticker))
+    print('  {holding} @{average_price:.2f} (avg); '.format(**summary), end='')
+    print('bought: {bought}, sold: {sold}'.format(**summary))
+
+  def _print_current_positions(self):
+    for ticker, pos in self._get_positions().items():
+      summary = self._calc_position_summary(ticker, pos)
+      self._print_summary(ticker, summary)
+
+  def _print_ticker_summary(self, ticker):
+    summary = self._get_ticker_position_summary(ticker)
+    self._print_summary(ticker, summary)
+
+  def _print_anylist(self, name, highlights=[]):
+    bold  = '\033[01m'
+    reset = '\033[00m'
+    getter = getattr(self, '_get_{}list'.format(name))
+    for ticker,data in getter().items():
+      age = timestamp_age_string(data['timestamp'])
+      S = '{}\t{}\t(added {})'.format(ticker, data['note'], age)
+      if ticker in highlights:
+        print('{}{}{}'.format(bold, S, reset))
+      else:
+        print(S)
+
+  def _print_watchlist(self, highlight=None):
+    return self._print_anylist('watch', highlight or [])
+
+  def _print_picklist(self, highlight=None):
+    return self._print_anylist('pick', highlight or [])
+
+  def _print_history(self):
+    for ticker,recs in self._get_history().items():
+      for rec in recs:
+        tt = rec[0]
+        print('{}\t{}'.format(ticker, rec))
+
+
+def now_tuple():
+  """Get the current datetime as a time-tuple."""
+  return tuple(datetime.datetime.now().utctimetuple())
+
+
+def timestamp_age_string(timestamp):
+  """Convert a time-tuple to a human-friendly format."""
+  now = datetime.datetime.now()
+  then = datetime.datetime(*timestamp[:7])
+  delta = now - then
+  days = delta.days
+  hours = int((delta.total_seconds() / 60.0 / 60.0) % 24)
+  minutes = int((delta.total_seconds() / 60.0) % 60)
+  if days == hours == 0:
+    return '{} mins ago'.format(minutes)
+  if days == 0:
+    return '{}h {}m ago'.format(hours, minutes)
+  return '{} days, {}:{} ago'.format(days, hours, minutes)
+
+
+def main(args):
+  datastore = Datastore()
+  getattr(datastore, args.command)(**vars(args))
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  subcommands = parser.add_subparsers(title='Subcommands', dest='command')
+
+  # buy
+  parser_buy = subcommands.add_parser('buy', help='Buy a stock')
+  parser_buy.add_argument('ticker')
+  parser_buy.add_argument('amount', type=int)
+  parser_buy.add_argument('price', type=float)
+
+  # sell
+  parser_sell = subcommands.add_parser('sell', help='Sell a stock')
+  parser_sell.add_argument('ticker')
+  parser_sell.add_argument('amount', type=int)
+  parser_sell.add_argument('price', type=float)
+
+  # positions
+  parser_positions = subcommands.add_parser('positions', help='Display current positions')
+
+  # watch
+  parser_watch = subcommands.add_parser('watch', help='Add a stock to the watch list')
+  parser_watch.add_argument('ticker')
+  parser_watch.add_argument('note', help='Tell why you are watching this stock')
+
+  # unwatch
+  parser_unwatch = subcommands.add_parser('unwatch', help='Remove a stock from the watch list')
+  parser_unwatch.add_argument('ticker')
+
+  # watchlist
+  parser_watchlist = subcommands.add_parser('watchlist', help='Display the watch list')
+
+  # history
+  parser_history = subcommands.add_parser('history', help='Display the history')
+
+  # pick
+  parser_pick = subcommands.add_parser('pick', help='Add a stock to the picklist')
+  parser_pick.add_argument('ticker')
+  parser_pick.add_argument('note', help='Tell why you picked this stock')
+
+  # unpick
+  parser_unpick = subcommands.add_parser('unpick', help='Remove a stock from the watch list')
+  parser_unpick.add_argument('ticker')
+
+  # picklist
+  parser_picklist = subcommands.add_parser('picklist', help='Display the pick list')
+
+  # today
+  parser_today = subcommands.add_parser('today', help='Show today\'s plan')
+
+  args = parser.parse_args()
+  if args.command == None:
+    print('ERROR: must give a command.\n')
+    parser.print_help()
+    sys.exit(1)
+  main(args)
