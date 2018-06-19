@@ -206,8 +206,10 @@ class Datastore(object):
 
   def _print_anylist(self, name, highlights=[]):
     getter = getattr(self, '_get_{}list'.format(name))
-    for ticker,data in getter().items():
-      age = timestamp_age_string(data['timestamp'])
+    items = [(i[1]['timestamp'], i) for i in getter().items()]
+    items.sort(reverse=True)
+    for timestamp, (ticker, data) in items:
+      age = timestamp_age_string(timestamp)
       S = '{}\t{}\t(added {})'.format(ticker, data['note'], age)
       if ticker in highlights:
         print(colors.PaintGreen(S))
