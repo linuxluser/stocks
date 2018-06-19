@@ -11,14 +11,12 @@ import pandas as pd
 from scipy import signal
 
 import fetcher
+import colors
 
-
-# Time offset
-UTC_OFFSET = -7  # PST timezone
 
 # Takes into account unprintable characters
 # NOTE: add 10 more characters per color+reset combo you add
-LINE_FORMAT = '{0: <18}{1: <21}{2: <26}{3: <22}{4: <21}{5: <23}{6: <26}'
+LINE_FORMAT = '{0: <20}{1: <23}{2: <28}{3: <24}{4: <23}{5: <25}{6: <28}'
 
 UP_ARROW = '\u25b2'
 DOWN_ARROW = '\u25bc'
@@ -29,71 +27,6 @@ OPEN   = fetcher.DataSource.OPEN
 HIGH   = fetcher.DataSource.HIGH
 LOW    = fetcher.DataSource.LOW
 VOLUME = fetcher.DataSource.VOLUME
-
-
-class Colors():
-  """Colors for printing.
-
-  The color values must be the same number of characters long so that way they
-  are known to LINE_FORMAT's various padding lengths.
-  """
-  RESET      = '\033[00m'
-  BOLD       = '\033[01m'
-  UNDERLINE  = '\033[04m'
-  BLACK      = '\033[30m'
-  RED        = '\033[31m'
-  GREEN      = '\033[32m'
-  YELLOW     = '\033[33m'
-  BLUE       = '\033[34m'
-  MAGENTA    = '\033[35m'
-  CYAN       = '\033[36m'
-  LT_GRAY    = '\033[37m'
-  DK_GRAY    = '\033[38m'
-  LT_RED     = '\033[91m'
-  LT_GREEN   = '\033[92m'
-  LT_YELLOW  = '\033[93m'
-  LT_BLUE    = '\033[94m'
-  LT_MAGENTA = '\033[95m'
-  LT_CYAN    = '\033[96m'
-  BG_RED     = '\033[41m'
-  BG_GREEN   = '\033[42m'
-  BG_YELLOW  = '\033[43m'
-  BG_BLUE    = '\033[44m'
-  BG_MAGENTA = '\033[45m'
-  BG_CYAN    = '\033[46m'
-  BG_WHITE   = '\033[107m'
-
-  @staticmethod
-  def Paint(S, color):
-    return '{}{}{}'.format(color, S, Colors.RESET)
-
-  @staticmethod
-  def PaintForegroundBackground(S, fg_color, bg_color):
-    return '{}{}{}{}'.format(fg_color, bg_color, S, Colors.RESET)
-
-  PaintBold = staticmethod(lambda S: Colors.Paint(S, Colors.BOLD))
-  PaintUnderline = staticmethod(lambda S: Colors.Paint(S, Colors.UNDERLINE))
-  PaintRed = staticmethod(lambda S: Colors.Paint(S, Colors.RED))
-  PaintGreen = staticmethod(lambda S: Colors.Paint(S, Colors.GREEN))
-  PaintYellow = staticmethod(lambda S: Colors.Paint(S, Colors.YELLOW))
-  PaintBlue = staticmethod(lambda S: Colors.Paint(S, Colors.BLUE))
-  PaintMagenta = staticmethod(lambda S: Colors.Paint(S, Colors.MAGENTA))
-  PaintCyan = staticmethod(lambda S: Colors.Paint(S, Colors.CYAN))
-  PaintLightRed = staticmethod(lambda S: Colors.Paint(S, Colors.LT_RED))
-  PaintLightGreen = staticmethod(lambda S: Colors.Paint(S, Colors.LT_GREEN))
-  PaintLightYellow = staticmethod(lambda S: Colors.Paint(S, Colors.LT_YELLOW))
-  PaintLightBlue = staticmethod(lambda S: Colors.Paint(S, Colors.LT_BLUE))
-  PaintLightMagenta = staticmethod(lambda S: Colors.Paint(S, Colors.LT_MAGENTA))
-  PaintLightCyan = staticmethod(lambda S: Colors.Paint(S, Colors.LT_CYAN))
-  PaintBackgroundRed = staticmethod(lambda S: Colors.Paint(S, Colors.BG_RED))
-  PaintBackgroundGreen = staticmethod(lambda S: Colors.Paint(S, Colors.BG_GREEN))
-  PaintBackgroundYellow = staticmethod(lambda S: Colors.Paint(S, Colors.BG_YELLOW))
-  PaintBackgroundBlue = staticmethod(lambda S: Colors.Paint(S, Colors.BG_BLUE))
-  PaintBackgroundMagenta = staticmethod(lambda S: Colors.Paint(S, Colors.BG_MAGENTA))
-  PaintBackgroundCyan = staticmethod(lambda S: Colors.Paint(S, Colors.BG_CYAN))
-
-  # Text/background combos
-  PaintBlackOnWhite = staticmethod(lambda S: Colors.PaintForegroundBackground(S, Colors.BLACK, Colors.BG_WHITE))
 
 
 class PivotPoints(object):
@@ -157,9 +90,9 @@ def EnergyOfTrend(df):
 
 
 def ReportEnergyOfTrend(direction, count, total_change):
-  arrow = Colors.PaintGreen(UP_ARROW)
+  arrow = colors.PaintGreen(UP_ARROW)
   if direction < 0:
-    arrow = Colors.PaintRed(DOWN_ARROW)
+    arrow = colors.PaintRed(DOWN_ARROW)
   return '{} [t={}d]'.format(arrow, count)
 
 
@@ -174,9 +107,9 @@ def ReportEnergyOfMomentum(df):
   arrow = UP_ARROW
   if direction < 0:
     arrow = DOWN_ARROW
-  macd = Colors.PaintGreen('{:.2f}'.format(macd_val))
+  macd = colors.PaintGreen('{:.2f}'.format(macd_val))
   if macd_val < 0:
-    macd = Colors.PaintRed('{:.2f}'.format(macd_val))
+    macd = colors.PaintRed('{:.2f}'.format(macd_val))
   return '{} [macd={}]'.format(arrow, macd)
 
 
@@ -190,12 +123,12 @@ def ReportEnergyOfCycle(direction, k):
   arrow = UP_ARROW
   if direction < 0:
     arrow = DOWN_ARROW
-  color = Colors.YELLOW
+  color = colors.YELLOW
   if k >= 80:
-    color = Colors.RED
+    color = colors.RED
   elif k <= 20:
-    color = Colors.GREEN
-  return '{} [k={}{:.1f}{}]'.format(arrow, color, k, Colors.RESET)
+    color = colors.GREEN
+  return '{} [k={}{:.1f}{}]'.format(arrow, color, k, colors.RESET)
 
 
 def EnergyOfScale(orig_df, timeframe='W'):
@@ -216,9 +149,9 @@ def EnergyOfScale(orig_df, timeframe='W'):
 
 
 def ReportEnergyOfScale(direction, count, total_change):
-  arrow = Colors.PaintGreen(UP_ARROW)
+  arrow = colors.PaintGreen(UP_ARROW)
   if direction < 0:
-    arrow = Colors.PaintRed(DOWN_ARROW)
+    arrow = colors.PaintRed(DOWN_ARROW)
   return '{} [t={:d}w]'.format(arrow, count)
 
 
@@ -231,12 +164,12 @@ def ReportVolatility(wVol, mVol):
   arrow = UP_ARROW
   if wVol < mVol:
     arrow = DOWN_ARROW
-  color = Colors.GREEN
+  color = colors.GREEN
   if wVol > 3 and wVol < 5:
-    color = Colors.YELLOW
+    color = colors.YELLOW
   elif wVol >= 5:
-    color = Colors.RED
-  return '{} [w={}{:.2f}%{}]'.format(arrow, color, wVol, Colors.RESET)
+    color = colors.RED
+  return '{} [w={}{:.2f}%{}]'.format(arrow, color, wVol, colors.RESET)
 
 
 def CalculatePivotPoints(incoming_df):
@@ -266,24 +199,24 @@ def CalculatePivotPoints(incoming_df):
 
 def ReportPivotPoints(ppoints, close):
   # Pivot points are ordered and colored statically
-  strs = [Colors.PaintRed('{:.2f}'.format(ppoints.s3)),
-          Colors.PaintLightRed('{:.2f}'.format(ppoints.s2)),
-          Colors.PaintYellow('{:.2f}'.format(ppoints.s1)),
+  strs = [colors.PaintRed('{:.2f}'.format(ppoints.s3)),
+          colors.PaintLightRed('{:.2f}'.format(ppoints.s2)),
+          colors.PaintYellow('{:.2f}'.format(ppoints.s1)),
           '{:.2f}'.format(ppoints.pp),
-          Colors.PaintCyan('{:.2f}'.format(ppoints.r1)),
-          Colors.PaintBlue('{:.2f}'.format(ppoints.r2)),
-          Colors.PaintMagenta('{:.2f}'.format(ppoints.r3))]
+          colors.PaintCyan('{:.2f}'.format(ppoints.r1)),
+          colors.PaintBlue('{:.2f}'.format(ppoints.r2)),
+          colors.PaintMagenta('{:.2f}'.format(ppoints.r3))]
 
 
-  # Colors the 'close' value according to its place in the index
-  close_colorizer = {0: Colors.PaintBackgroundRed,
-                     1: Colors.PaintBackgroundRed,
-                     2: Colors.PaintBackgroundYellow,
-                     3: Colors.PaintBlackOnWhite,
-                     4: Colors.PaintBlackOnWhite,
-                     5: Colors.PaintBackgroundCyan,
-                     6: Colors.PaintBackgroundBlue,
-                     7: Colors.PaintBackgroundMagenta}
+  # colors the 'close' value according to its place in the index
+  close_colorizer = {0: colors.PaintBackgroundRed,
+                     1: colors.PaintBackgroundRed,
+                     2: colors.PaintBackgroundYellow,
+                     3: colors.PaintBlackOnWhite,
+                     4: colors.PaintBlackOnWhite,
+                     5: colors.PaintBackgroundCyan,
+                     6: colors.PaintBackgroundBlue,
+                     7: colors.PaintBackgroundMagenta}
 
   # Find the index where the 'close' value belongs so we can insert it with the other strings
   vals = [ppoints.r3, ppoints.r2, ppoints.r1, ppoints.pp, ppoints.s1, ppoints.s2, ppoints.s3, close]
@@ -298,13 +231,13 @@ def ReportPivotPoints(ppoints, close):
 
 def main(args):
   # Print header
-  print(LINE_FORMAT.format(*(Colors.PaintUnderline('TICKER'),
-                             Colors.PaintUnderline('TREND'),
-                             Colors.PaintUnderline('MOMENTUM'),
-                             Colors.PaintUnderline('CYCLE'),
-                             Colors.PaintUnderline('SCALE'),
-                             Colors.PaintUnderline('VOLATILITY'),
-                             Colors.PaintUnderline('PIVOT POINTS'))))
+  print(LINE_FORMAT.format(*(colors.PaintUnderline('TICKER'),
+                             colors.PaintUnderline('TREND'),
+                             colors.PaintUnderline('MOMENTUM'),
+                             colors.PaintUnderline('CYCLE'),
+                             colors.PaintUnderline('SCALE'),
+                             colors.PaintUnderline('VOLATILITY'),
+                             colors.PaintUnderline('PIVOT POINTS'))))
 
   for ticker in args.tickers:
     df = fetcher.DataFetcher().FetchData(ticker)
@@ -314,7 +247,7 @@ def main(args):
     scale = ReportEnergyOfScale(*EnergyOfScale(df))
     volatility = ReportVolatility(*Volatility(df))
     pivotpoints = ReportPivotPoints(*CalculatePivotPoints(df))
-    print(LINE_FORMAT.format(Colors.PaintCyan(ticker),
+    print(LINE_FORMAT.format(colors.PaintCyan(ticker),
                              trend,
                              momentum,
                              cycle,
