@@ -29,6 +29,8 @@ import time
 from sh import at
 from sh import atrm
 
+import colors
+
 
 class Error(Exception):
   """Base error class."""
@@ -203,14 +205,12 @@ class Datastore(object):
     self._print_summary(ticker, summary)
 
   def _print_anylist(self, name, highlights=[]):
-    bold  = '\033[01m'
-    reset = '\033[00m'
     getter = getattr(self, '_get_{}list'.format(name))
     for ticker,data in getter().items():
       age = timestamp_age_string(data['timestamp'])
       S = '{}\t{}\t(added {})'.format(ticker, data['note'], age)
       if ticker in highlights:
-        print('{}{}{}'.format(bold, S, reset))
+        print(colors.PaintGreen(S))
       else:
         print(S)
 
