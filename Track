@@ -27,6 +27,7 @@ import sys
 import time
 
 from sh import at
+from sh import atrm
 
 
 class Error(Exception):
@@ -112,21 +113,33 @@ class Datastore(object):
         raise EntryDoesNotExistError('{} not in watchlist'.format(ticker))
       del watchlist[ticker]
 
-  def _add_to_picklist(self, ticker, note):
+  def _add_to_picklist(self, ticker, note, at_job_id):
     with shelve.open(self._picklist_file) as picklist:
       if ticker in picklist:
         raise EntryExistsError('{} already in picklist'.format(ticker))
-      picklist[ticker] = {'note': note, 'timestamp': now_tuple()}
+      picklist[ticker] = {'note': note, 'at_job_id': at_job_id, 'timestamp': now_tuple()}
 
   def _remove_from_picklist(self, ticker):
     with shelve.open(self._picklist_file) as picklist:
       if ticker not in picklist:
         raise EntryDoesNotExistError('{} not in picklist'.format(ticker))
+      self._cancel_future_removal_from_picklist(picklist[ticker]['at_job_id'])
       del picklist[ticker]
 
   def _remove_from_picklist_in_future(self, ticker, hours):
+    """Use the system 'at' command to run 'unpick' at a future time."""
+    job_id = None
     script = os.path.abspath(__file__)
-    at('now + {} hours'.format(hours), _in='{} unpick {}'.format(script, ticker))
+    cmd = '{} unpick {}'.format(script, ticker)
+    when = 'now + {} hours'.format(hours)
+    for line in at(when, _in=cmd, _iter=True, _err_to_out=True):
+      if job_id is None and 'job' in line:
+        words = line.split()
+        job_id = int(words[words.index('job') + 1]) # next word after 'job'
+    return job_id
+
+  def _cancel_future_removal_from_picklist(self, at_job_id):
+    atrm(at_job_id)
 
   def buy(self, ticker, amount, price, **ignored):
     self._add_history_record(ticker, 'buy', amount, price)
@@ -159,8 +172,8 @@ class Datastore(object):
   def pick(self, tickers, note='', **ignored):
     for ticker in tickers:
       self._add_history_record(ticker, 'pick', note)
-      self._add_to_picklist(ticker, note)
-      self._remove_from_picklist_in_future(ticker, 24)
+      at_job_id = self._remove_from_picklist_in_future(ticker, 24)
+      self._add_to_picklist(ticker, note, at_job_id)
     self._print_picklist(tickers)
 
   def unpick(self, tickers, **ignored):
