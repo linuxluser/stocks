@@ -30,6 +30,7 @@ from sh import at
 from sh import atrm
 
 import colors
+import fetcher
 
 
 class Error(Exception):
@@ -69,6 +70,8 @@ class Datastore(object):
     for db in databases:
       setattr(self, 'get_{}'.format(db), self.__make_getter(db))
 
+    self.data_fetcher = fetcher.DataFetcher()
+
   def __make_getter(self, db):
     """Makes a getter method for a specific database."""
     filename = getattr(self, '_{}_file'.format(db))
@@ -76,6 +79,15 @@ class Datastore(object):
       with shelve.open(filename) as db:
         return dict(db)
     return fn
+
+  def _get_OHLCV(self, ticker):
+    df = self.data_fetcher.FetchData(ticker).tail(1)
+    return {'open': float(df[fetcher.DataSource.OPEN]),
+            'high': float(df[fetcher.DataSource.HIGH]),
+            'low': float(df[fetcher.DataSource.LOW]),
+            'close': float(df[fetcher.DataSource.CLOSE]),
+            'volume': float(df[fetcher.DataSource.VOLUME])}
+
 
   def _add_history_record(self, ticker, *args):
     record = (now_tuple(),) + args
@@ -129,7 +141,9 @@ class Datastore(object):
     with shelve.open(self._watchlist_file) as watchlist:
       if ticker in watchlist:
         raise EntryExistsError('{} already in watchlist'.format(ticker))
-      watchlist[ticker] = {'note': note, 'timestamp': now_tuple()}
+      watchlist[ticker] = {'note': note,
+                           'timestamp': now_tuple(),
+                           'prices': self._get_OHLCV(ticker)}
     self._add_history_record(ticker, 'watch', note)
 
   def remove_from_watchlist(self, ticker):
@@ -144,7 +158,10 @@ class Datastore(object):
       if ticker in picklist:
         raise EntryExistsError('{} already in picklist'.format(ticker))
       at_job_id = self._remove_from_picklist_in_future(ticker, 24)
-      picklist[ticker] = {'note': note, 'at_job_id': at_job_id, 'timestamp': now_tuple()}
+      picklist[ticker] = {'note': note,
+                          'at_job_id': at_job_id,
+                          'timestamp': now_tuple(),
+                          'prices': self._get_OHLCV(ticker)}
     self._add_history_record(ticker, 'pick', note)
 
   def remove_from_picklist(self, ticker):
@@ -179,14 +196,14 @@ class CommandDispatcher(object):
   def _print_anylist(self, name, highlights, highlight_color):
     highlight_all = '*' in highlights
     getter = getattr(self.datastore, 'get_{}list'.format(name))
-    headers = ['TICKER', 'NOTE', 'AGE']
+    headers = ['TICKER', 'NOTE', 'AGE', 'PRICE (then)']
     items = [(i[1]['timestamp'], i) for i in getter().items()]
     items.sort(reverse=True)
     rows = []
     for timestamp, (ticker, data) in items:
       age = timestamp_age_string(timestamp)
-      rows.append((ticker, data['note'] or '', age))
-    TabularPrinter(headers).print(rows)
+      rows.append((ticker, data['note'] or '', age, data['prices']['close']))
+    TabularPrinter(headers).print(rows, price_columns=[4])
 
   def _print_watchlist(self, highlights=[], highlight_color=colors.GREEN):
     return self._print_anylist('watch', highlights, highlight_color)
@@ -276,28 +293,31 @@ class TabularPrinter(object):
     """Collate the row value along with its width to get format() args."""
     return [t for tup in zip(row, widths) for t in tup]
 
-  def _mkformat(self, sep):
+  def _mkformat(self, sep, price_columns):
     """Create a format string with given separator."""
-    return sep.join(['{:<{}}']*len(self.headers))
+    columns = ['{:<{}}']*len(self.headers)
+    for c in price_columns:
+      columns[c -1] = '{:<{}.2f}'
+    return sep.join(columns)
 
   def _print_headers(self, widths):
-    bar_fmt = self._mkformat(' | ')
-    plus_fmt = self._mkformat('-+-')
+    bar_fmt = self._mkformat(' | ', [])
+    plus_fmt = self._mkformat('-+-', [])
     dashes = ('-'*widths[i] for i,_ in enumerate(self.headers))
     print(bar_fmt.format(*self._collate(self.headers, widths)))
     print(plus_fmt.format(*self._collate(dashes, widths)))
 
-  def _print_rows(self, widths, rows):
-    bar_fmt = self._mkformat(' | ')
+  def _print_rows(self, widths, rows, price_columns):
+    bar_fmt = self._mkformat(' | ', price_columns)
     for row in rows:
       print(bar_fmt.format(*self._collate(row, widths)))
 
-  def print(self, rows):
+  def print(self, rows, price_columns=[]):
     if not rows:
       return
     widths = self._calc_max_widths(rows)
     self._print_headers(widths)
-    self._print_rows(widths, rows)
+    self._print_rows(widths, rows, price_columns)
 
 
 def is_ticker(ticker):
