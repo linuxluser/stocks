@@ -179,15 +179,14 @@ class CommandDispatcher(object):
   def _print_anylist(self, name, highlights, highlight_color):
     highlight_all = '*' in highlights
     getter = getattr(self.datastore, 'get_{}list'.format(name))
+    headers = ['TICKER', 'NOTE', 'AGE']
     items = [(i[1]['timestamp'], i) for i in getter().items()]
     items.sort(reverse=True)
+    rows = []
     for timestamp, (ticker, data) in items:
       age = timestamp_age_string(timestamp)
-      S = '{}\t{}\t(added {})'.format(ticker, data['note'], age)
-      if highlight_all or ticker in highlights:
-        print(colors.Paint(S, highlight_color))
-      else:
-        print(S)
+      rows.append((ticker, data['note'] or '', age))
+    TabularPrinter(headers).print(rows)
 
   def _print_watchlist(self, highlights=[], highlight_color=colors.GREEN):
     return self._print_anylist('watch', highlights, highlight_color)
@@ -202,9 +201,9 @@ class CommandDispatcher(object):
         print('{}\t{}'.format(ticker, rec))
 
   def _print_todays_plan(self, picklist_color=colors.GREEN, watchlist_color=colors.CYAN):
-    print(colors.Paint('----{ PICKLIST }----', picklist_color))
+    print(colors.Paint('===={ PICKLIST }====', picklist_color))
     self._print_picklist(highlights=['*'], highlight_color=picklist_color)
-    print(colors.Paint('\n----{ WATCHLIST }----', watchlist_color))
+    print(colors.Paint('\n===={ WATCHLIST }====', watchlist_color))
     self._print_watchlist(highlights=['*'], highlight_color=watchlist_color)
 
   def buy(self, ticker, count, price, **ignored):
@@ -253,6 +252,52 @@ class CommandDispatcher(object):
 
   def today(self, **ignored):
     self._print_todays_plan()
+
+
+class TabularPrinter(object):
+
+  def __init__(self, headers):
+    self.headers = headers
+
+  def _calc_max_widths(self, rows):
+    """Calculate max widths of each column."""
+    num_cols = len(self.headers)
+    widths = [len(h) for h in self.headers]
+    for row in rows:
+      if len(row) != num_cols:
+        raise ValueError('headers and row lengths must be the same')
+      for i, val in enumerate(row):
+        length = len(str(val))
+        if length > widths[i]:
+          widths[i] = length
+    return widths
+
+  def _collate(self, row, widths):
+    """Collate the row value along with its width to get format() args."""
+    return [t for tup in zip(row, widths) for t in tup]
+
+  def _mkformat(self, sep):
+    """Create a format string with given separator."""
+    return sep.join(['{:<{}}']*len(self.headers))
+
+  def _print_headers(self, widths):
+    bar_fmt = self._mkformat(' | ')
+    plus_fmt = self._mkformat('-+-')
+    dashes = ('-'*widths[i] for i,_ in enumerate(self.headers))
+    print(bar_fmt.format(*self._collate(self.headers, widths)))
+    print(plus_fmt.format(*self._collate(dashes, widths)))
+
+  def _print_rows(self, widths, rows):
+    bar_fmt = self._mkformat(' | ')
+    for row in rows:
+      print(bar_fmt.format(*self._collate(row, widths)))
+
+  def print(self, rows):
+    if not rows:
+      return
+    widths = self._calc_max_widths(rows)
+    self._print_headers(widths)
+    self._print_rows(widths, rows)
 
 
 def is_ticker(ticker):
