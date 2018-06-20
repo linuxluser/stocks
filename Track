@@ -301,16 +301,16 @@ class TabularPrinter(object):
     return sep.join(columns)
 
   def _print_headers(self, widths):
-    bar_fmt = self._mkformat(' | ', [])
-    plus_fmt = self._mkformat('-+-', [])
+    space_fmt = self._mkformat('   ', [])
+    bar_fmt = self._mkformat('-|-', [])
     dashes = ('-'*widths[i] for i,_ in enumerate(self.headers))
-    print(bar_fmt.format(*self._collate(self.headers, widths)))
-    print(plus_fmt.format(*self._collate(dashes, widths)))
+    print(space_fmt.format(*self._collate(self.headers, widths)))
+    print(bar_fmt.format(*self._collate(dashes, widths)))
 
   def _print_rows(self, widths, rows, price_columns):
-    bar_fmt = self._mkformat(' | ', price_columns)
+    fmt = self._mkformat('   ', price_columns)
     for row in rows:
-      print(bar_fmt.format(*self._collate(row, widths)))
+      print(fmt.format(*self._collate(row, widths)))
 
   def print(self, rows, price_columns=[]):
     if not rows:
