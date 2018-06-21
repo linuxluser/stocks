@@ -112,23 +112,23 @@ class Datastore(object):
   def _cancel_future_removal_from_picklist(self, at_job_id):
     atrm(at_job_id)
 
-  def _add_position(self, sale_type, ticker, count, price):
+  def _add_position(self, sale_type, ticker, shares, price):
     with shelve.open(self._positions_file) as positions:
       p = positions.setdefault(ticker, {'buys': [], 'sells': []})
-      p[sale_type + 's'].append((count, price))
+      p[sale_type + 's'].append((shares, price))
       positions[ticker] = p
-    self._add_history_record(ticker, sale_type, count, price)
+    self._add_history_record(ticker, sale_type, shares, price)
 
-  def add_buy(ticker, count, price):
-    self._add_position('buy', ticker, count, price)
+  def add_buy(self, ticker, shares, price):
+    self._add_position('buy', ticker, shares, price)
 
-  def add_sell(ticker, count, price):
-    self._add_position('sell', ticker, count, price)
+  def add_sell(self, ticker, shares, price):
+    self._add_position('sell', ticker, shares, price)
 
   def get_ticker_position_summary(self, ticker):
     with shelve.open(self._positions_file) as positions:
       pos = positions[ticker]
-      return self._calc_position_summary(ticker, pos)
+      return self.calc_position_summary(ticker, pos)
 
   def calc_position_summary(self, ticker, pos):
     bought = sum(a for a,_ in pos['buys'])
@@ -186,11 +186,11 @@ class CommandDispatcher(object):
 
   def _print_current_positions(self):
     for ticker, pos in self.datastore.get_positions().items():
-      summary = self._calc_position_summary(ticker, pos)
+      summary = self.datastore.calc_position_summary(ticker, pos)
       self._print_summary(ticker, summary)
 
   def _print_ticker_summary(self, ticker):
-    summary = self._get_ticker_position_summary(ticker)
+    summary = self.datastore.get_ticker_position_summary(ticker)
     self._print_summary(ticker, summary)
 
   def _print_anylist(self, name, highlights, highlight_color):
@@ -223,13 +223,13 @@ class CommandDispatcher(object):
     print(colors.Paint('\n===={ WATCHLIST }====', watchlist_color))
     self._print_watchlist(highlights=['*'], highlight_color=watchlist_color)
 
-  def buy(self, ticker, count, price, **ignored):
-    self.datastore.add_buy(ticker, count, price)
+  def buy(self, ticker, shares, price, **ignored):
+    self.datastore.add_buy(ticker, shares, price)
     self._print_ticker_summary(ticker)
   b = buy  # to respond to alias
 
-  def sell(self, ticker, count, price, **ignored):
-    self.datastore.add_sell(ticker, count, price)
+  def sell(self, ticker, shares, price, **ignored):
+    self.datastore.add_sell(ticker, shares, price)
     self._print_ticker_summary(ticker)
   s = sell  # to respond to alias
 
@@ -367,13 +367,13 @@ if __name__ == '__main__':
   # buy
   parser_buy = subcommands.add_parser('buy', aliases=['b'], help='Buy a stock')
   parser_buy.add_argument('ticker')
-  parser_buy.add_argument('amount', type=int)
+  parser_buy.add_argument('shares', type=int)
   parser_buy.add_argument('price', type=float)
 
   # sell
   parser_sell = subcommands.add_parser('sell', aliases=['s'], help='Sell a stock')
   parser_sell.add_argument('ticker')
-  parser_sell.add_argument('amount', type=int)
+  parser_sell.add_argument('shares', type=int)
   parser_sell.add_argument('price', type=float)
 
   # positions
