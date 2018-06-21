@@ -13,7 +13,7 @@ Subcommands:
  - pick        Add a stock to the picklist
  - unpick      Remove a stock from the watch list
  - picklist    Display the pick list
- - today       Show today's plan
+ - listall     Show all lists
 """
 
 import argparse
@@ -217,9 +217,13 @@ class CommandDispatcher(object):
         tt = rec[0]
         print('{}\t{}'.format(ticker, rec))
 
-  def _print_todays_plan(self, picklist_color=colors.GREEN, watchlist_color=colors.CYAN):
+  def _print_all_lists(self, picklist_color=colors.GREEN,
+                             positions_color=colors.BLUE,
+                             watchlist_color=colors.CYAN):
     print(colors.Paint('[PICKLIST]', picklist_color))
     self._print_picklist(highlights=['*'], highlight_color=picklist_color)
+    print(colors.Paint('\n[POSITIONS]', positions_color))
+    self._print_current_positions()
     print(colors.Paint('\n[WATCHLIST]', watchlist_color))
     self._print_watchlist(highlights=['*'], highlight_color=watchlist_color)
 
@@ -267,8 +271,8 @@ class CommandDispatcher(object):
   def history(self, **ignored):
     self._print_history()
 
-  def today(self, **ignored):
-    self._print_todays_plan()
+  def listall(self, **ignored):
+    self._print_all_lists()
 
 
 class TabularPrinter(object):
@@ -409,10 +413,10 @@ if __name__ == '__main__':
   # picklist
   parser_picklist = subcommands.add_parser('picklist', help='Display the pick list')
 
-  # today
-  parser_today = subcommands.add_parser('today', help='Show today\'s plan')
+  # listall
+  parser_listall = subcommands.add_parser('listall', help='Show all lists')
 
   args = parser.parse_args()
   if args.command == None:
-    args.command = 'today'
+    args.command = 'listall'
   main(args)
