@@ -70,8 +70,6 @@ class Datastore(object):
     for db in databases:
       setattr(self, 'get_{}'.format(db), self.__make_getter(db))
 
-    self.data_fetcher = fetcher.DataFetcher()
-
   def __make_getter(self, db):
     """Makes a getter method for a specific database."""
     filename = getattr(self, '_{}_file'.format(db))
@@ -79,15 +77,6 @@ class Datastore(object):
       with shelve.open(filename) as db:
         return dict(db)
     return fn
-
-  def _get_OHLCV(self, ticker):
-    df = self.data_fetcher.FetchData(ticker).tail(1)
-    return {'open': float(df[fetcher.DataSource.OPEN]),
-            'high': float(df[fetcher.DataSource.HIGH]),
-            'low': float(df[fetcher.DataSource.LOW]),
-            'close': float(df[fetcher.DataSource.CLOSE]),
-            'volume': float(df[fetcher.DataSource.VOLUME])}
-
 
   def _add_history_record(self, ticker, *args):
     record = (now_tuple(),) + args
@@ -127,7 +116,7 @@ class Datastore(object):
     sold = sum(t[2] for t in sell_trans)
     holding = bought - sold
     avg = sum(t[3] for t in buy_trans)/len(buy_trans)
-    return {'holding': holding, 'average_price': avg, 'bought': bought, 'sold': sold}
+    return {'holding': holding, 'average_cost': avg, 'bought': bought, 'sold': sold}
 
   def add_buy(self, ticker, shares, price):
     self._add_position('buy', ticker, shares, price)
@@ -152,7 +141,7 @@ class Datastore(object):
         raise EntryExistsError('{} already in watchlist'.format(ticker))
       watchlist[ticker] = {'note': note,
                            'timestamp': now_tuple(),
-                           'prices': self._get_OHLCV(ticker)}
+                           'prices': get_OHLCV(ticker)}
     self._add_history_record(ticker, 'watch', note)
 
   def remove_from_watchlist(self, ticker):
@@ -170,7 +159,7 @@ class Datastore(object):
       picklist[ticker] = {'note': note,
                           'at_job_id': at_job_id,
                           'timestamp': now_tuple(),
-                          'prices': self._get_OHLCV(ticker)}
+                          'prices': get_OHLCV(ticker)}
     self._add_history_record(ticker, 'pick', note)
 
   def remove_from_picklist(self, ticker):
@@ -190,16 +179,22 @@ class CommandDispatcher(object):
 
   def _print_summary(self, ticker, summary):
     print('{}:'.format(ticker))
-    print('  {holding} @{average_price:.2f} (avg); '.format(**summary), end='')
+    print('  {holding} @{average_cost:.2f} (avg); '.format(**summary), end='')
     print('bought: {bought}, sold: {sold}'.format(**summary))
 
   def _print_current_positions(self):
     summaries = self.datastore.get_all_position_summaries()
-    headers = ['TICKER', 'HOLDINGS']
+    headers = ['TICKER', 'SHARES', 'AVG COST', 'GAIN/LOSS']
     rows = []
     for ticker, summary in summaries.items():
-      rows.append((ticker, '{holding} @{average_price} (avg)'.format(**summary)))
-    TabularPrinter(headers).print(rows, indent=4)
+      current_price = get_OHLCV(ticker)['close']
+      gain_loss = current_price - summary['average_cost']
+      gain_loss_pct = (gain_loss / current_price) * 100.0
+      rows.append((ticker,
+                   summary['holding'],
+                   summary['average_cost'],
+                   '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct)))
+    TabularPrinter(headers).print(rows, price_columns=[3], indent=4)
 
   def _print_ticker_summary(self, ticker):
     summary = self.datastore.get_position_summary(ticker)
@@ -375,6 +370,15 @@ def timestamp_age_string(timestamp):
   if days == 0:
     return '{}h {}m ago'.format(hours, minutes)
   return '{} days, {}:{} ago'.format(days, hours, minutes)
+
+
+def get_OHLCV(ticker):
+  df = fetcher.DataFetcher().FetchData(ticker).tail(1)
+  return {'open': float(df[fetcher.DataSource.OPEN]),
+          'high': float(df[fetcher.DataSource.HIGH]),
+          'low': float(df[fetcher.DataSource.LOW]),
+          'close': float(df[fetcher.DataSource.CLOSE]),
+          'volume': float(df[fetcher.DataSource.VOLUME])}
 
 
 def main(args):
