@@ -114,10 +114,20 @@ class Datastore(object):
 
   def _add_position(self, sale_type, ticker, shares, price):
     with shelve.open(self._positions_file) as positions:
-      p = positions.setdefault(ticker, {'buys': [], 'sells': []})
-      p[sale_type + 's'].append((shares, price))
+      p = positions.setdefault(ticker, {'transactions': []})
+      p['transactions'].append((now_tuple(), sale_type, shares, price))
       positions[ticker] = p
     self._add_history_record(ticker, sale_type, shares, price)
+
+  def _calc_position_summary(self, ticker, pos):
+    trans = pos['transactions']
+    buy_trans = [t for t in trans if t[1] == 'buy']
+    sell_trans = [t for t in trans if t[1] == 'sell']
+    bought = sum(t[2] for t in buy_trans)
+    sold = sum(t[2] for t in sell_trans)
+    holding = bought - sold
+    avg = sum(t[3] for t in buy_trans)/len(buy_trans)
+    return {'holding': holding, 'average_price': avg, 'bought': bought, 'sold': sold}
 
   def add_buy(self, ticker, shares, price):
     self._add_position('buy', ticker, shares, price)
@@ -125,17 +135,16 @@ class Datastore(object):
   def add_sell(self, ticker, shares, price):
     self._add_position('sell', ticker, shares, price)
 
-  def get_ticker_position_summary(self, ticker):
+  def get_position_summary(self, ticker):
     with shelve.open(self._positions_file) as positions:
-      pos = positions[ticker]
-      return self.calc_position_summary(ticker, pos)
+      return self._calc_position_summary(ticker, positions[ticker])
 
-  def calc_position_summary(self, ticker, pos):
-    bought = sum(a for a,_ in pos['buys'])
-    sold = sum(a for a,_ in pos['sells'])
-    holding = bought - sold
-    avg = sum(p for _,p in pos['buys'])/len(pos['buys'])
-    return {'holding': holding, 'average_price': avg, 'bought': bought, 'sold': sold}
+  def get_all_position_summaries(self):
+    summaries = {}
+    with shelve.open(self._positions_file) as positions:
+      for ticker, pos in positions.items():
+        summaries[ticker] = self._calc_position_summary(ticker, pos)
+    return summaries
 
   def add_to_watchlist(self, ticker, note):
     with shelve.open(self._watchlist_file) as watchlist:
@@ -185,18 +194,21 @@ class CommandDispatcher(object):
     print('bought: {bought}, sold: {sold}'.format(**summary))
 
   def _print_current_positions(self):
-    for ticker, pos in self.datastore.get_positions().items():
-      summary = self.datastore.calc_position_summary(ticker, pos)
-      self._print_summary(ticker, summary)
+    summaries = self.datastore.get_all_position_summaries()
+    headers = ['TICKER', 'HOLDINGS']
+    rows = []
+    for ticker, summary in summaries.items():
+      rows.append((ticker, '{holding} @{average_price} (avg)'.format(**summary)))
+    TabularPrinter(headers).print(rows, indent=4)
 
   def _print_ticker_summary(self, ticker):
-    summary = self.datastore.get_ticker_position_summary(ticker)
+    summary = self.datastore.get_position_summary(ticker)
     self._print_summary(ticker, summary)
 
   def _print_anylist(self, name, highlights, highlight_color):
     highlight_all = '*' in highlights
     getter = getattr(self.datastore, 'get_{}list'.format(name))
-    headers = ['TICKER', 'NOTE', 'AGE', 'PRICE (then)']
+    headers = ['TICKER', 'NOTE', 'AGE', '{} PRICE'.format(name.upper())]
     items = [(i[1]['timestamp'], i) for i in getter().items()]
     items.sort(reverse=True)
     rows = []
