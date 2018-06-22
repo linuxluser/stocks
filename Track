@@ -118,8 +118,16 @@ class Datastore(object):
     avg = sum(t[3] for t in buy_trans)/len(buy_trans)
     return {'holding': holding, 'average_cost': avg, 'bought': bought, 'sold': sold}
 
-  def add_buy(self, ticker, shares, price):
+  def update_position(self, ticker, **kwargs):
+    with shelve.open(self._positions_file, writeback=True) as positions:
+      if ticker not in positions:
+        raise EntryDoesNotExistError('No position for {}'.format(ticker))
+      positions[ticker].update(kwargs)
+
+  def add_buy(self, ticker, shares, price, **attrs):
     self._add_position('buy', ticker, shares, price)
+    if attrs:
+      self.update_position(ticker, **attrs)
 
   def add_sell(self, ticker, shares, price):
     self._add_position('sell', ticker, shares, price)
@@ -133,6 +141,8 @@ class Datastore(object):
     with shelve.open(self._positions_file) as positions:
       for ticker, pos in positions.items():
         summaries[ticker] = self._calc_position_summary(ticker, pos)
+        summaries[ticker].update({'stoploss': pos.get('stoploss'),
+                                  'takeprofit': pos.get('takeprofit')})
     return summaries
 
   def add_to_watchlist(self, ticker, note):
@@ -182,18 +192,42 @@ class CommandDispatcher(object):
     print('  {holding} @{average_cost:.2f} (avg); '.format(**summary), end='')
     print('bought: {bought}, sold: {sold}'.format(**summary))
 
+  def _make_position_scale(self, stoploss, price, takeprofit):
+    p  = '{:.2f}'.format(price or 0.0)
+    sl = tp = 'oo'  # "infinity" lol
+    if stoploss:
+      sl = '{:.2f}'.format(stoploss)
+    if takeprofit:
+      tp = '{:.2f}'.format(takeprofit)
+    num_dashes = 30 - len(sl) - len(p) - len(tp)
+    if not stoploss or not takeprofit:
+      left = int(num_dashes/2)
+      right = num_dashes - left
+    else:
+      total = takeprofit - stoploss
+      percent_l = (price - stoploss) / total
+      percent_r = (takeprofit - price) / total
+      left = round(num_dashes * percent_l)
+      right = round(num_dashes * percent_r)
+    bar = '{}{}{}'.format('_'*left, p, '_'*right)
+    return '{}{}{}'.format(sl, bar, tp)
+
   def _print_current_positions(self):
     summaries = self.datastore.get_all_position_summaries()
-    headers = ['TICKER', 'SHARES', 'AVG COST', 'GAIN/LOSS']
+    #headers = ['TICKER', 'SHARES', 'AVG COST', 'GAIN/LOSS', 'STOPLOSS', 'TAKEPROFIT']
+    headers = ['TICKER', 'SHARES', 'AVG COST', 'GAIN/LOSS', 'POSITION']
     rows = []
     for ticker, summary in summaries.items():
       current_price = get_OHLCV(ticker)['close']
       gain_loss = current_price - summary['average_cost']
       gain_loss_pct = (gain_loss / current_price) * 100.0
+      stoploss, takeprofit = summary.get('stoploss'), summary.get('takeprofit')
+      pos_scale = self._make_position_scale(stoploss, current_price, takeprofit)
       rows.append((ticker,
                    summary['holding'],
                    summary['average_cost'],
-                   '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct)))
+                   '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct),
+                   pos_scale))
     TabularPrinter(headers).print(rows, price_columns=[3], indent=4)
 
   def _print_ticker_summary(self, ticker):
@@ -234,8 +268,13 @@ class CommandDispatcher(object):
     print(colors.Paint('\n[WATCHLIST]', watchlist_color))
     self._print_watchlist(highlights=['*'], highlight_color=watchlist_color)
 
-  def buy(self, ticker, shares, price, **ignored):
-    self.datastore.add_buy(ticker, shares, price)
+  def buy(self, ticker, shares, price, **kwargs):
+    # selectively pluck out attributes/flags from kwargs
+    attrs = {}
+    for attr in ('stoploss', 'takeprofit'):
+      if attr in kwargs:
+        attrs[attr] = kwargs[attr]
+    self.datastore.add_buy(ticker, shares, price, **attrs)
     self._print_ticker_summary(ticker)
   b = buy  # to respond to alias
 
@@ -245,6 +284,14 @@ class CommandDispatcher(object):
   s = sell  # to respond to alias
 
   def positions(self, **ignored):
+    self._print_current_positions()
+
+  def stoploss(self, ticker, price, **ignored):
+    self.datastore.update_position(ticker, stoploss=price)
+    self._print_current_positions()
+
+  def takeprofit(self, ticker, price, **ignored):
+    self.datastore.update_position(ticker, takeprofit=price)
     self._print_current_positions()
 
   def watch(self, tickers, note='', **ignored):
@@ -395,12 +442,24 @@ if __name__ == '__main__':
   parser_buy.add_argument('ticker')
   parser_buy.add_argument('shares', type=int)
   parser_buy.add_argument('price', type=float)
+  parser_buy.add_argument('-s', '--stoploss', type=float, help='Stop-loss price.')
+  parser_buy.add_argument('-t', '--takeprofit', type=float, help='Take-profit price.')
 
   # sell
   parser_sell = subcommands.add_parser('sell', aliases=['s'], help='Sell a stock')
   parser_sell.add_argument('ticker')
   parser_sell.add_argument('shares', type=int)
   parser_sell.add_argument('price', type=float)
+
+  # stoploss
+  parser_stoploss = subcommands.add_parser('stoploss', help='Set the stoploss price for a position')
+  parser_stoploss.add_argument('ticker')
+  parser_stoploss.add_argument('price', type=float)
+
+  # takeprofit
+  parser_takeprofit = subcommands.add_parser('takeprofit', help='Set the takeprofit price for a position')
+  parser_takeprofit.add_argument('ticker')
+  parser_takeprofit.add_argument('price', type=float)
 
   # positions
   parser_positions = subcommands.add_parser('positions', help='Display current positions')
