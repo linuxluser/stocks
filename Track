@@ -240,10 +240,10 @@ class CommandDispatcher(object):
       pos_scale = self._make_position_scale(stoploss, current_price, takeprofit, purch_price)
       rows.append((ticker,
                    summary['holding'],
-                   summary['average_cost'],
+                   '{:.2f}'.format(summary['average_cost']),
                    '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct),
                    pos_scale))
-    printer.TabularPrinter(headers).print(rows, price_columns=[3], indent=4)
+    printer.TabularPrinter(headers).print(rows, indent=4)
     return rows
 
   def _print_ticker_summary(self, ticker):
@@ -259,8 +259,9 @@ class CommandDispatcher(object):
     rows = []
     for timestamp, (ticker, data) in items:
       age = timestamp_age_string(timestamp)
-      rows.append((ticker, data['note'] or '', age, data['prices']['close']))
-    printer.TabularPrinter(headers).print(rows, price_columns=[4], indent=4)
+      close = '{:.2f}'.format(data['prices']['close'])
+      rows.append((ticker, data['note'] or '', age, close))
+    printer.TabularPrinter(headers).print(rows, indent=4)
     return rows
 
   def _print_watchlist(self, highlights=[], highlight_color=colors.GREEN):
