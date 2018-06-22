@@ -1,11 +1,17 @@
 # stocks
-Scripts and Things I Might Use For Stock Analysis.
+Scripts For Stock Analysis and Tracking
 
-Get up and running with:
+### Install dependencies
 
 ```bash
-$ pip3 install beautifulsoup4 numpy pandas==0.21.0 pandas-datareader==0.5.0 requests scipy sh
+$ sudo apt install at python3-pip
+$ sudo pip3 install beautifulsoup4 numpy pandas==0.21.0 pandas-datareader==0.5.0 requests scipy sh
+```
+
+### Get scripts
+
+```bash
 $ git clone https://github.com/linuxluser/stocks.git
 $ cd stocks
-$ python3 Energies FB AMZN NFLX GOOGL
+$ ./Energies FB AMZN NFLX GOOGL
 ```
