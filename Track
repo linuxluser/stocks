@@ -243,6 +243,7 @@ class CommandDispatcher(object):
                    '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct),
                    pos_scale))
     TabularPrinter(headers).print(rows, price_columns=[3], indent=4)
+    return rows
 
   def _print_ticker_summary(self, ticker):
     summary = self.datastore.get_position_summary(ticker)
@@ -259,6 +260,7 @@ class CommandDispatcher(object):
       age = timestamp_age_string(timestamp)
       rows.append((ticker, data['note'] or '', age, data['prices']['close']))
     TabularPrinter(headers).print(rows, price_columns=[4], indent=4)
+    return rows
 
   def _print_watchlist(self, highlights=[], highlight_color=colors.GREEN):
     return self._print_anylist('watch', highlights, highlight_color)
@@ -276,11 +278,14 @@ class CommandDispatcher(object):
                              positions_color=colors.BLUE,
                              watchlist_color=colors.CYAN):
     print(colors.Paint('[PICKLIST]', picklist_color))
-    self._print_picklist(highlights=['*'], highlight_color=picklist_color)
+    if not self._print_picklist(highlights=['*'], highlight_color=picklist_color):
+      print('    Nothing in picklist')
     print(colors.Paint('\n[POSITIONS]', positions_color))
-    self._print_current_positions()
+    if not self._print_current_positions():
+      print('    No positions')
     print(colors.Paint('\n[WATCHLIST]', watchlist_color))
-    self._print_watchlist(highlights=['*'], highlight_color=watchlist_color)
+    if not self._print_watchlist(highlights=['*'], highlight_color=watchlist_color):
+      print('    Nothing in watchlist')
 
   def buy(self, ticker, shares, price, **kwargs):
     # selectively pluck out attributes/flags from kwargs
