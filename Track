@@ -192,9 +192,10 @@ class CommandDispatcher(object):
     print('  {holding} @{average_cost:.2f} (avg); '.format(**summary), end='')
     print('bought: {bought}, sold: {sold}'.format(**summary))
 
-  def _make_position_scale(self, stoploss, price, takeprofit):
+  def _make_position_scale(self, stoploss, price, takeprofit, purch_price):
     p  = '{:.2f}'.format(price or 0.0)
     sl = tp = 'oo'  # "infinity" lol
+    p_color = colors.CYAN
     if stoploss:
       sl = '{:.2f}'.format(stoploss)
     if takeprofit:
@@ -209,20 +210,33 @@ class CommandDispatcher(object):
       percent_r = (takeprofit - price) / total
       left = round(num_dashes * percent_l)
       right = round(num_dashes * percent_r)
-    bar = '{}{}{}'.format('_'*left, p, '_'*right)
+      # Paint light-red if we've already lost money
+      if price < purch_price:
+        p_color = colors.LT_RED
+      # Alert if we're about to get stopped out!
+      if percent_l <= .2:
+        p = '!{}'.format(p)
+        p_color = colors.RED
+    left_bar = colors.PaintLightGray('_'*left)
+    right_bar = colors.PaintLightGray('_'*right)
+    bar = '{}{}{}'.format(left_bar, colors.Paint(p, p_color), right_bar)
+    if sl != 'oo':
+      sl = colors.PaintRed(sl)
+    if tp != 'oo':
+      tp = colors.PaintGreen(tp)
     return '{}{}{}'.format(sl, bar, tp)
 
   def _print_current_positions(self):
     summaries = self.datastore.get_all_position_summaries()
-    #headers = ['TICKER', 'SHARES', 'AVG COST', 'GAIN/LOSS', 'STOPLOSS', 'TAKEPROFIT']
     headers = ['TICKER', 'SHARES', 'AVG COST', 'GAIN/LOSS', 'POSITION']
     rows = []
     for ticker, summary in summaries.items():
+      purch_price = summary['average_cost']
       current_price = get_OHLCV(ticker)['close']
-      gain_loss = current_price - summary['average_cost']
+      gain_loss = current_price - purch_price
       gain_loss_pct = (gain_loss / current_price) * 100.0
       stoploss, takeprofit = summary.get('stoploss'), summary.get('takeprofit')
-      pos_scale = self._make_position_scale(stoploss, current_price, takeprofit)
+      pos_scale = self._make_position_scale(stoploss, current_price, takeprofit, purch_price)
       rows.append((ticker,
                    summary['holding'],
                    summary['average_cost'],
