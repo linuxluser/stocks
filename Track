@@ -345,7 +345,7 @@ class TabularPrinter(object):
         if i+1 in price_columns:
           length = len('{:.2f}'.format(val))
         else:
-          length = len(str(val))
+          length = len(colors.StripColor(str(val)))
         if length > widths[i]:
           widths[i] = length
     return widths

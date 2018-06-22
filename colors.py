@@ -6,6 +6,12 @@ are known to LINE_FORMAT's various padding lengths.
 """
 
 
+# Length of the string of each color code
+COLOR_CODE_LENGTH = 6
+
+# Escape code used for each terminal color
+ESCAPE_CODE = '\033'
+
 # Terminal color constants
 RESET      = '\033[000m'
 BOLD       = '\033[001m'
@@ -70,3 +76,12 @@ PaintBackgroundCyan = lambda S: Paint(S, BG_CYAN)
 
 # Text/background combos
 PaintBlackOnWhite = lambda S: PaintForegroundBackground(S, BLACK, BG_WHITE)
+
+
+def StripColor(S):
+  index = S.find(ESCAPE_CODE)
+  while index != -1:
+    color = S[index:index+COLOR_CODE_LENGTH]
+    S = S.replace(color, '')
+    index = S.find(ESCAPE_CODE)
+  return S
