@@ -8,8 +8,11 @@ import colors
 class TabularPrinter(object):
   """Prints data as an ASCII table."""
 
-  def __init__(self, headers):
+  def __init__(self, headers, widths=None):
     self.headers = headers
+    self.widths = widths
+    if widths and len(self.headers) != len(self.widths):
+      raise ValueError('argument "widths" must be a list of same length as headers')
 
   def _calc_max_widths(self, rows):
     """Calculate max widths of each column."""
@@ -49,7 +52,9 @@ class TabularPrinter(object):
   def print(self, rows, indent=0):
     if not rows:
       return
-    widths = self._calc_max_widths(rows)
+    widths = self.widths
+    if not widths:
+      widths = self._calc_max_widths(rows)
     underlined_headers = iter(colors.PaintUnderline(h) for h in self.headers)
     self._print_rows(widths, (underlined_headers,), indent)
     self._print_rows(widths, rows, indent)
