@@ -86,3 +86,21 @@ def StripColor(S):
     S = S.replace(color, '')
     index = S.find(ESCAPE_CODE)
   return S
+
+
+def FindColors(S):
+  index = S.find(ESCAPE_CODE)
+  colors = []
+  while index != -1:
+    color = S[index:index+COLOR_CODE_LENGTH]
+    colors.append((index, color))
+    index = S.find(ESCAPE_CODE, index)
+  return colors
+
+
+def ColorCount(S):
+  return S.count(ESCAPE_CODE)
+
+
+def ColorCharacterCount(S):
+  return S.count(ESCAPE_CODE) * COLOR_CODE_LENGTH
