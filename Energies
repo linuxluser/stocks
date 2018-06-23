@@ -10,13 +10,10 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 
-import fetcher
 import colors
+import fetcher
+import printer
 
-
-# Takes into account unprintable characters
-# NOTE: add 10 more characters per color+reset combo you add
-LINE_FORMAT = '{0: <20}{1: <23}{2: <28}{3: <24}{4: <23}{5: <25}{6: <28}'
 
 UP_ARROW = '\u25b2'
 DOWN_ARROW = '\u25bc'
@@ -230,30 +227,27 @@ def ReportPivotPoints(ppoints, close):
 
 
 def main(args):
-  # Print header
-  print(LINE_FORMAT.format(*(colors.PaintUnderline('TICKER'),
-                             colors.PaintUnderline('TREND'),
-                             colors.PaintUnderline('MOMENTUM'),
-                             colors.PaintUnderline('CYCLE'),
-                             colors.PaintUnderline('SCALE'),
-                             colors.PaintUnderline('VOLATILITY'),
-                             colors.PaintUnderline('PIVOT POINTS'))))
+  headers = ['TICKER', 'TREND', 'MOMENTUM', 'CYCLE', 'SCALE', 'VOLATILITY', 'PIVOT POINTS']
+  widths = [6, 10, 14, 10, 9, 11, 13]
+  prnt = printer.TabularPrinter(headers=headers, widths=widths)
 
-  for ticker in args.tickers:
-    df = fetcher.DataFetcher().FetchData(ticker)
-    trend = ReportEnergyOfTrend(*EnergyOfTrend(df))
-    momentum = ReportEnergyOfMomentum(EnergyOfMomentum(df))
-    cycle = ReportEnergyOfCycle(*EnergyOfCycle(df))
-    scale = ReportEnergyOfScale(*EnergyOfScale(df))
-    volatility = ReportVolatility(*Volatility(df))
-    pivotpoints = ReportPivotPoints(*CalculatePivotPoints(df))
-    print(LINE_FORMAT.format(colors.PaintCyan(ticker),
-                             trend,
-                             momentum,
-                             cycle,
-                             scale,
-                             volatility,
-                             pivotpoints))
+  def rows():
+    for ticker in args.tickers:
+      df = fetcher.DataFetcher().FetchData(ticker)
+      trend = ReportEnergyOfTrend(*EnergyOfTrend(df))
+      momentum = ReportEnergyOfMomentum(EnergyOfMomentum(df))
+      cycle = ReportEnergyOfCycle(*EnergyOfCycle(df))
+      scale = ReportEnergyOfScale(*EnergyOfScale(df))
+      volatility = ReportVolatility(*Volatility(df))
+      pivotpoints = ReportPivotPoints(*CalculatePivotPoints(df))
+      yield (colors.PaintCyan(ticker),
+             trend,
+             momentum,
+             cycle,
+             scale,
+             volatility,
+             pivotpoints)
+  prnt.print(rows())
 
 
 if __name__ == '__main__':

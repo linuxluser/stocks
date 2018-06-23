@@ -44,7 +44,7 @@ class TabularPrinter(object):
     return [colors.PaintUnderline(h) for h in self.headers]
 
   def _print_rows(self, widths, rows, indent):
-    fmt = self._mkformat('   ')
+    fmt = self._mkformat('  ')
     for row in rows:
       print(' '*indent, end='')
       print(fmt.format(*self._collate(row, widths)))
