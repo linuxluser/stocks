@@ -31,7 +31,7 @@ from sh import atrm
 
 import colors
 import fetcher
-import printer
+import printing
 
 
 class Error(Exception):
@@ -243,7 +243,7 @@ class CommandDispatcher(object):
                    '{:.2f}'.format(summary['average_cost']),
                    '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct),
                    pos_scale))
-    printer.TabularPrinter(headers).print(rows, indent=4)
+    printing.TabularPrinter(headers).print(rows, indent=4)
     return rows
 
   def _print_ticker_summary(self, ticker):
@@ -261,7 +261,7 @@ class CommandDispatcher(object):
       age = timestamp_age_string(timestamp)
       close = '{:.2f}'.format(data['prices']['close'])
       rows.append((ticker, data['note'] or '', age, close))
-    printer.TabularPrinter(headers).print(rows, indent=4)
+    printing.TabularPrinter(headers).print(rows, indent=4)
     return rows
 
   def _print_watchlist(self, highlights=[], highlight_color=colors.GREEN):

@@ -12,7 +12,7 @@ from scipy import signal
 
 import colors
 import fetcher
-import printer
+import printing
 
 
 UP_ARROW = '\u25b2'
@@ -229,7 +229,7 @@ def ReportPivotPoints(ppoints, close):
 def main(args):
   headers = ['TICKER', 'TREND', 'MOMENTUM', 'CYCLE', 'SCALE', 'VOLATILITY', 'PIVOT POINTS']
   widths = [6, 10, 14, 10, 9, 11, 13]
-  prnt = printer.TabularPrinter(headers=headers, widths=widths)
+  printer = printing.TabularPrinter(headers=headers, widths=widths)
 
   def rows():
     for ticker in args.tickers:
@@ -247,7 +247,7 @@ def main(args):
              scale,
              volatility,
              pivotpoints)
-  prnt.print(rows())
+  printer.print(rows())
 
 
 if __name__ == '__main__':
