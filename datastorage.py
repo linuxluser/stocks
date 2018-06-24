@@ -90,7 +90,11 @@ class Datastore(object):
     sold = sum(t[2] for t in sell_trans)
     holding = bought - sold
     avg = sum(t[3] for t in buy_trans)/len(buy_trans)
-    return {'holding': holding, 'average_cost': avg, 'bought': bought, 'sold': sold}
+    return {'holding': holding,
+            'average_cost': avg,
+            'bought': bought,
+            'sold': sold,
+            'last_update': trans[0][0]}
 
   def update_position(self, ticker, **kwargs):
     with shelve.open(self._positions_file, writeback=True) as positions:

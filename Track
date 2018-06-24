@@ -90,9 +90,11 @@ class CommandDispatcher(object):
 
   def _print_current_positions(self):
     summaries = self.datastore.get_all_position_summaries()
+    values = [(i[1]['last_update'], i[0], i[1]) for i in summaries.items()]
+    values.sort()
     headers = ['TICKER', 'SHARES', 'AVG COST', 'TOTAL INVESTED', 'GAIN/LOSS', 'STOPLOSS-TAKEPROFIT SCALE']
     rows = []
-    for ticker, summary in summaries.items():
+    for _, ticker, summary in values:
       shares = summary['holding']
       cost = summary['average_cost']
       stoploss = summary.get('stoploss')
