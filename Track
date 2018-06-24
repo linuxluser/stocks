@@ -87,7 +87,7 @@ class CommandDispatcher(object):
       gain_loss_pct = (gain_loss / current_price) * 100.0
       stoploss, takeprofit = summary.get('stoploss'), summary.get('takeprofit')
       pos_scale = self._make_position_scale(stoploss, current_price, takeprofit, purch_price)
-      rows.append((ticker,
+      rows.append((colors.PaintCyan(ticker),
                    summary['holding'],
                    '{:.2f}'.format(summary['average_cost']),
                    '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct),
@@ -102,14 +102,23 @@ class CommandDispatcher(object):
   def _print_anylist(self, name, highlights, highlight_color):
     highlight_all = '*' in highlights
     getter = getattr(self.datastore, 'get_{}list'.format(name))
-    headers = ['TICKER', 'NOTE', 'AGE', '{} PRICE'.format(name.upper())]
+    headers = ['TICKER', 'NOTE', 'AGE', 'PRICE', 'PRICE NOW']
     items = [(i[1]['timestamp'], i) for i in getter().items()]
     items.sort(reverse=True)
     rows = []
     for timestamp, (ticker, data) in items:
       age = timestamp_age_string(timestamp)
-      close = '{:.2f}'.format(data['prices']['close'])
-      rows.append((ticker, data['note'] or '', age, close))
+      rec_price = data['prices']['close']
+      price = get_OHLCV(ticker)['close']
+      pct_diff = (price - rec_price)/price*100
+      price_then = '{:.2f}'.format(rec_price)
+      if pct_diff < 0:
+        change_disp = colors.PaintRed('{:.1f}%'.format(pct_diff))
+      else:
+        change_disp = colors.PaintGreen('{:.1f}%'.format(pct_diff))
+      price_disp = '{:.2f}'.format(price)
+      price_now = '{} ({})'.format(price_disp, change_disp)
+      rows.append((colors.PaintCyan(ticker), data['note'] or '', age, price_then, price_now))
     printing.TabularPrinter(headers).print(rows, indent=4)
     return rows
 
