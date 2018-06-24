@@ -115,7 +115,7 @@ class CommandDispatcher(object):
   def _print_anylist(self, name, highlights, highlight_color):
     highlight_all = '*' in highlights
     getter = getattr(self.datastore, 'get_{}list'.format(name))
-    headers = ['TICKER', 'NOTE', 'AGE', 'PRICE', 'PRICE NOW']
+    headers = ['TICKER', 'NOTE', 'AGE', 'PRICE THEN', 'PRICE NOW']
     items = [(i[1]['timestamp'], i) for i in getter().items()]
     items.sort(reverse=True)
     rows = []
@@ -147,15 +147,15 @@ class CommandDispatcher(object):
         tt = rec[0]
         print('{}\t{}'.format(ticker, rec))
 
-  def _print_all_lists(self, picklist_color=colors.GREEN,
+  def _print_all_lists(self, picklist_color=colors.CYAN,
                              positions_color=colors.BLUE,
-                             watchlist_color=colors.CYAN):
-    print(colors.Paint('[PICKLIST]', picklist_color))
-    if not self._print_picklist(highlights=['*'], highlight_color=picklist_color):
-      print('    Nothing in picklist')
-    print(colors.Paint('\n[POSITIONS]', positions_color))
+                             watchlist_color=colors.YELLOW):
+    print(colors.Paint('[POSITIONS]', positions_color))
     if not self._print_current_positions():
       print('    No positions')
+    print(colors.Paint('\n[PICKLIST]', picklist_color))
+    if not self._print_picklist(highlights=['*'], highlight_color=picklist_color):
+      print('    Nothing in picklist')
     print(colors.Paint('\n[WATCHLIST]', watchlist_color))
     if not self._print_watchlist(highlights=['*'], highlight_color=watchlist_color):
       print('    Nothing in watchlist')
