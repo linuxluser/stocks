@@ -45,7 +45,9 @@ class CommandDispatcher(object):
       sl = '{:.2f}'.format(stoploss)
     if takeprofit:
       tp = '{:.2f}'.format(takeprofit)
-    num_dashes = 30 - len(sl) - len(p) - len(tp)
+    if price <= stoploss:
+      sl = ''
+    num_dashes = 50 - len(sl) - len(p) - len(tp)
     if not stoploss or not takeprofit:
       left = int(num_dashes/2)
       right = num_dashes - left
@@ -61,13 +63,16 @@ class CommandDispatcher(object):
       # Alert if we're about to get stopped out!
       if percent_l <= .2:
         p = '!{}'.format(p)
-        p_color = colors.RED
+        if price <= stoploss:
+          p_color = colors.BG_RED
+        else:
+          p_color = colors.RED
     left_bar = colors.PaintLightGray('_'*left)
     right_bar = colors.PaintLightGray('_'*right)
     bar = '{}{}{}'.format(left_bar, colors.Paint(p, p_color), right_bar)
-    if sl != 'oo':
+    if stoploss:
       sl = colors.PaintRed(sl)
-    if tp != 'oo':
+    if takeprofit:
       tp = colors.PaintGreen(tp)
     return '{}{}{}'.format(sl, bar, tp)
 
