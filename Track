@@ -76,21 +76,34 @@ class CommandDispatcher(object):
       tp = colors.PaintGreen(tp)
     return '{}{}{}'.format(sl, bar, tp)
 
+  def _format_gain_loss(self, shares, cost, current_price):
+    gain_loss_per_share = current_price - cost
+    gain_loss_pct = (gain_loss_per_share / current_price) * 100.0
+    gain_loss_total = shares * gain_loss_per_share
+    if gain_loss_pct < 0:
+      color = colors.RED
+    else:
+      color = colors.GREEN
+    txt_total = '{:,.2f}'.format(gain_loss_total)
+    txt_pct = '{:.2f}%'.format(gain_loss_pct)
+    return '{} ({})'.format(colors.Paint(txt_total, color), colors.Paint(txt_pct, color))
+
   def _print_current_positions(self):
     summaries = self.datastore.get_all_position_summaries()
-    headers = ['TICKER', 'SHARES', 'AVG COST', 'GAIN/LOSS', 'POSITION']
+    headers = ['TICKER', 'SHARES', 'AVG COST', 'TOTAL INVESTED', 'GAIN/LOSS', 'STOPLOSS-TAKEPROFIT SCALE']
     rows = []
     for ticker, summary in summaries.items():
-      purch_price = summary['average_cost']
+      shares = summary['holding']
+      cost = summary['average_cost']
+      stoploss = summary.get('stoploss')
+      takeprofit = summary.get('takeprofit')
       current_price = get_OHLCV(ticker)['close']
-      gain_loss = current_price - purch_price
-      gain_loss_pct = (gain_loss / current_price) * 100.0
-      stoploss, takeprofit = summary.get('stoploss'), summary.get('takeprofit')
-      pos_scale = self._make_position_scale(stoploss, current_price, takeprofit, purch_price)
-      rows.append((colors.PaintCyan(ticker),
-                   summary['holding'],
-                   '{:.2f}'.format(summary['average_cost']),
-                   '{:.2f} ({:.2f}%)'.format(gain_loss, gain_loss_pct),
+      pos_scale = self._make_position_scale(stoploss, current_price, takeprofit, cost)
+      rows.append((colors.PaintBlue(ticker),
+                   colors.PaintBlue(shares),
+                   colors.PaintBlue('{:,.2f}'.format(cost)),
+                   colors.PaintBlue('{:,.2f}'.format(shares * cost)),
+                   self._format_gain_loss(shares, cost, current_price),
                    pos_scale))
     printing.TabularPrinter(headers).print(rows, indent=4)
     return rows
