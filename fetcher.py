@@ -108,3 +108,13 @@ class DataFetcher(object):
     else:
       df = pd.read_pickle(data_file)
     return df
+
+
+def get_OHLCV(ticker):
+  """Convenience function to get the open, high, low, close and volume of today."""
+  df = DataFetcher().FetchData(ticker).tail(1)
+  return {'open': float(df[DataSource.OPEN]),
+          'high': float(df[DataSource.HIGH]),
+          'low': float(df[DataSource.LOW]),
+          'close': float(df[DataSource.CLOSE]),
+          'volume': float(df[DataSource.VOLUME])}

@@ -7,8 +7,11 @@ import os
 import pathlib
 import shelve
 
+import sh
 from sh import at
 from sh import atrm
+
+import fetcher
 
 
 class Error(Exception):
@@ -73,7 +76,12 @@ class Datastore(object):
     return job_id
 
   def _cancel_future_removal_from_picklist(self, at_job_id):
-    atrm(at_job_id)
+    try:
+      atrm(at_job_id)
+    except sh.ErrorReturnCode_1 as e:
+      if 'Cannot find jobid' in str(e.stderr):
+        return
+      raise
 
   def _add_position(self, sale_type, ticker, shares, price):
     with shelve.open(self._positions_file) as positions:
@@ -129,7 +137,7 @@ class Datastore(object):
         raise EntryExistsError('{} already in watchlist'.format(ticker))
       watchlist[ticker] = {'note': note,
                            'timestamp': now_tuple(),
-                           'prices': get_OHLCV(ticker)}
+                           'prices': fetcher.get_OHLCV(ticker)}
     self._add_history_record(ticker, 'watch', note)
 
   def remove_from_watchlist(self, ticker):
@@ -147,7 +155,7 @@ class Datastore(object):
       picklist[ticker] = {'note': note,
                           'at_job_id': at_job_id,
                           'timestamp': now_tuple(),
-                          'prices': get_OHLCV(ticker)}
+                          'prices': fetcher.get_OHLCV(ticker)}
     self._add_history_record(ticker, 'pick', note)
 
   def remove_from_picklist(self, ticker):

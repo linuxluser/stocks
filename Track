@@ -99,7 +99,7 @@ class CommandDispatcher(object):
       cost = summary['average_cost']
       stoploss = summary.get('stoploss')
       takeprofit = summary.get('takeprofit')
-      current_price = get_OHLCV(ticker)['close']
+      current_price = fetcher.get_OHLCV(ticker)['close']
       pos_scale = self._make_position_scale(stoploss, current_price, takeprofit, cost)
       rows.append((colors.PaintBlue(ticker),
                    colors.PaintBlue(shares),
@@ -124,7 +124,7 @@ class CommandDispatcher(object):
     for timestamp, (ticker, data) in items:
       age = timestamp_age_string(timestamp)
       rec_price = data['prices']['close']
-      price = get_OHLCV(ticker)['close']
+      price = fetcher.get_OHLCV(ticker)['close']
       pct_diff = (price - rec_price)/price*100
       price_then = '{:.2f}'.format(rec_price)
       if pct_diff < 0:
@@ -251,15 +251,6 @@ def timestamp_age_string(timestamp):
   if days == 0:
     return '{}h {}m ago'.format(hours, minutes)
   return '{} days, {}:{} ago'.format(days, hours, minutes)
-
-
-def get_OHLCV(ticker):
-  df = fetcher.DataFetcher().FetchData(ticker).tail(1)
-  return {'open': float(df[fetcher.DataSource.OPEN]),
-          'high': float(df[fetcher.DataSource.HIGH]),
-          'low': float(df[fetcher.DataSource.LOW]),
-          'close': float(df[fetcher.DataSource.CLOSE]),
-          'volume': float(df[fetcher.DataSource.VOLUME])}
 
 
 def main(args):
