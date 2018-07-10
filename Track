@@ -96,6 +96,8 @@ class CommandDispatcher(object):
     rows = []
     for _, ticker, summary in values:
       shares = summary['holding']
+      if shares == 0:
+        continue
       cost = summary['average_cost']
       stoploss = summary.get('stoploss')
       takeprofit = summary.get('takeprofit')
