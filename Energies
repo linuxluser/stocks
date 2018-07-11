@@ -116,15 +116,22 @@ def EnergyOfCycle(df):
   return direction, df['StochK'].iloc[-1]
 
 
+def GradeEnergyOfCycle(k):
+  if k >= 80:
+    return 'high'
+  elif k > 20:
+    return 'medium'
+  elif k <= 20:
+    return 'low'
+
+
 def ReportEnergyOfCycle(direction, k):
   arrow = UP_ARROW
   if direction < 0:
     arrow = DOWN_ARROW
-  color = colors.YELLOW
-  if k >= 80:
-    color = colors.RED
-  elif k <= 20:
-    color = colors.GREEN
+  color = {'low': colors.GREEN,
+           'medium': colors.YELLOW,
+           'high': colors.RED}[GradeEnergyOfCycle(k)]
   return '{} [k={}{:.1f}{}]'.format(arrow, color, k, colors.RESET)
 
 
@@ -236,14 +243,20 @@ def main(args):
       df = fetcher.DataFetcher().FetchData(ticker)
       trend = ReportEnergyOfTrend(*EnergyOfTrend(df))
       momentum = ReportEnergyOfMomentum(EnergyOfMomentum(df))
-      cycle = ReportEnergyOfCycle(*EnergyOfCycle(df))
+
+      # Cycle
+      cycle_direction, cycle_k = EnergyOfCycle(df)
+      if args.low_cycle_only and GradeEnergyOfCycle(cycle_k) != 'low':
+        continue
+      cycle_report = ReportEnergyOfCycle(cycle_direction, cycle_k)
+
       scale = ReportEnergyOfScale(*EnergyOfScale(df))
       volatility = ReportVolatility(*Volatility(df))
       pivotpoints = ReportPivotPoints(*CalculatePivotPoints(df))
       yield (colors.PaintCyan(ticker),
              trend,
              momentum,
-             cycle,
+             cycle_report,
              scale,
              volatility,
              pivotpoints)
@@ -253,6 +266,6 @@ def main(args):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('tickers', nargs='+')
-  parser.add_argument('--filter', '-f', nargs='*')
+  parser.add_argument('--low-cycle-only', '-L', type=bool, help='Only display stocks with a low cycle rating.')
   args = parser.parse_args()
   main(args)
