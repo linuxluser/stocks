@@ -18,23 +18,27 @@ def GetHTML(ticker):
 def GetVolatility(html):
   soup = BeautifulSoup(html, 'html.parser')
   elems = soup.select('table.snapshot-table2 td')
-  vol_index = None
-  atr_index = None
+  indices = {}
   for i, elem in enumerate(elems):
-    if elem.text.lower().strip() == 'volatility':
-      vol_index = i + 1
-    elif elem.text.lower().strip() == 'atr':
-      atr_index = i + 1
-  vol_weekly, vol_monthly = elems[vol_index].text.split()
-  atr = elems[atr_index].text
-  return vol_weekly, vol_monthly, atr
+    indices[elem.text.lower().strip()] = i + 1
+  vol_week, vol_month = elems[indices['volatility']].text.split()
+  return {'WeeklyVolatility': vol_week,
+          'MonthlyVolatility': vol_month,
+          'ATR': elems[indices['atr']].text,
+          'Price': elems[indices['price']].text}
 
 
 def main(args):
   for ticker in args.tickers:
     html = GetHTML(ticker)
-    vol_weekly, vol_monthly, atr = GetVolatility(html)
-    print('{}\tVW:{} VM:{} ATR:{}'.format(ticker, vol_weekly, vol_monthly, atr))
+    vals = GetVolatility(html)
+    vals['Ticker'] = ticker
+    vals['ATRPercent'] = (float(vals['ATR'])/float(vals['Price'])) * 100
+    print(('{Ticker}\t'
+           'VW:{WeeklyVolatility} '
+           'VM:{MonthlyVolatility} '
+           'ATR:{ATR} '
+           'ATR%:{ATRPercent:.1f}').format(**vals))
 
 
 if __name__ == '__main__':
