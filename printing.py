@@ -2,6 +2,8 @@
 """
 
 
+import sys
+
 import colors
 
 
@@ -49,8 +51,16 @@ class TabularPrinter(object):
       print(' '*indent, end='')
       print(fmt.format(*self._collate(row, widths)))
 
-  def print(self, rows, indent=0):
+  def _print_first_column(self, rows, indent):
+    for row in rows:
+      print(' '*indent, end='')
+      print(colors.StripColor(row[0]))
+
+  def print(self, rows, indent=0, detect_pipe=True):
     if not rows:
+      return
+    if detect_pipe and not sys.stdout.isatty():
+      self._print_first_column(rows, indent)
       return
     widths = self.widths
     if not widths:

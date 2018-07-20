@@ -109,7 +109,7 @@ class CommandDispatcher(object):
                    colors.PaintBlue('{:,.2f}'.format(shares * cost)),
                    self._format_gain_loss(shares, cost, current_price),
                    pos_scale))
-    printing.TabularPrinter(headers).print(rows, indent=4)
+    printing.TabularPrinter(headers).print(rows, indent=4, detect_pipe=False)
     return rows
 
   def _print_ticker_summary(self, ticker):
