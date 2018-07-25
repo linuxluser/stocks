@@ -135,6 +135,14 @@ def ReportEnergyOfCycle(direction, k):
   return '{} [k={}{:.1f}{}]'.format(arrow, color, k, colors.RESET)
 
 
+def FilterOutCycle(k, args):
+  """Determines whether to filter out this Cycle value based on args."""
+  if not args.cycle_low and not args.cycle_medium and not args.cycle_high:
+    return False
+  grade = GradeEnergyOfCycle(k)
+  return not getattr(args, 'cycle_' + grade)
+
+
 def EnergyOfScale(orig_df, timeframe='W'):
   # Resample data to get longer time frame
   orig_df.index = pd.to_datetime(orig_df.index)
@@ -246,7 +254,7 @@ def main(args):
 
       # Cycle
       cycle_direction, cycle_k = EnergyOfCycle(df)
-      if args.low_cycle_only and GradeEnergyOfCycle(cycle_k) != 'low':
+      if FilterOutCycle(cycle_k, args):
         continue
       cycle_report = ReportEnergyOfCycle(cycle_direction, cycle_k)
 
@@ -266,6 +274,8 @@ def main(args):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('tickers', nargs='+')
-  parser.add_argument('--low-cycle-only', '-L', type=bool, help='Only display stocks with a low cycle rating.')
+  parser.add_argument('--cycle-low', type=bool, help='Filter for tickers in the cycle low range.')
+  parser.add_argument('--cycle-medium', type=bool, help='Filter for tickers in the cycle medium range.')
+  parser.add_argument('--cycle-high', type=bool, help='Filter for tickers in the cycle high range.')
   args = parser.parse_args()
   main(args)
