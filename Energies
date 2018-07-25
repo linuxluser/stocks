@@ -160,11 +160,24 @@ def EnergyOfScale(orig_df, timeframe='W'):
   return TrendAnalysis(df['MACD'], 2)
 
 
-def ReportEnergyOfScale(direction, count, total_change):
-  arrow = colors.PaintGreen(UP_ARROW)
+def GradeEnergyOfScale(direction):
   if direction < 0:
-    arrow = colors.PaintRed(DOWN_ARROW)
+    return 'down'
+  return 'up'
+
+
+def ReportEnergyOfScale(direction, count, total_change):
+  arrow = {'up': colors.PaintGreen(UP_ARROW),
+           'down': colors.PaintRed(DOWN_ARROW)}[GradeEnergyOfScale(direction)]
   return '{} [t={:d}w]'.format(arrow, count)
+
+
+def FilterOutScale(direction, args):
+  """Determines whether to filter out this Scale value based on args."""
+  if not args.scale_up and not args.scale_down:
+    return False
+  grade = GradeEnergyOfScale(direction)
+  return not getattr(args, 'scale_' + grade)
 
 
 def Volatility(df):
@@ -258,7 +271,12 @@ def main(args):
         continue
       cycle_report = ReportEnergyOfCycle(cycle_direction, cycle_k)
 
-      scale = ReportEnergyOfScale(*EnergyOfScale(df))
+      # Scale
+      scale_args = EnergyOfScale(df)
+      if FilterOutScale(scale_args[2], args):
+        continue
+      scale = ReportEnergyOfScale(*scale_args)
+
       volatility = ReportVolatility(*Volatility(df))
       pivotpoints = ReportPivotPoints(*CalculatePivotPoints(df))
       yield (colors.PaintCyan(ticker),
@@ -277,5 +295,7 @@ if __name__ == '__main__':
   parser.add_argument('--cycle-low', type=bool, help='Filter for tickers in the cycle low range.')
   parser.add_argument('--cycle-medium', type=bool, help='Filter for tickers in the cycle medium range.')
   parser.add_argument('--cycle-high', type=bool, help='Filter for tickers in the cycle high range.')
+  parser.add_argument('--scale-up', type=bool, help='Filter for tickers who Scale energy is up.')
+  parser.add_argument('--scale-down', type=bool, help='Filter for tickers who Scale energy is down.')
   args = parser.parse_args()
   main(args)
