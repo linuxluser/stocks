@@ -85,11 +85,18 @@ class DataFetcher(object):
     since, before = self._MinutesInMarket(datetime.datetime.fromtimestamp(file_time))
     return (since, before) != (0, 0)
 
+  def _FileTimeIsToday(self, file_time):
+    t = datetime.datetime.now()
+    f = datetime.datetime.fromtimestamp(file_time)
+    return (t.day, t.month, t.year) == (f.day, f.month, f.year)
+
   def _IsDataFileStale(self, ticker, data_file):
     if not os.path.exists(data_file):
       return True
     file_time = os.path.getmtime(data_file)
     if self._IsMarketClosed(ticker):
+      if not self._FileTimeIsToday(file_time):
+        return True
       return self._FileTimeDuringMarketOpen(file_time)
     else:
       file_age = time.time() - file_time
