@@ -11,7 +11,8 @@ import requests
 
 def GetHTML(ticker):
   url = 'https://finviz.com/quote.ashx?t={}&ty=c&p=d&b=1'.format(ticker)
-  resp = requests.get(url)
+  user_agent = 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36'
+  resp = requests.get(url, headers={'User-Agent': user_agent})
   return resp.text
 
 
