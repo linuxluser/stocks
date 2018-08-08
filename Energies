@@ -86,10 +86,24 @@ def EnergyOfTrend(df):
   return TrendAnalysis(df['SMA50'], 1)
 
 
-def ReportEnergyOfTrend(direction, count, total_change):
-  arrow = colors.PaintGreen(UP_ARROW)
+def GradeEnergyOfTrend(direction):
   if direction < 0:
-    arrow = colors.PaintRed(DOWN_ARROW)
+    return 'down'
+  return 'up'
+
+
+def FilterOutTrend(direction, args):
+  """Determines whether to filter out this Trend value based on args."""
+  if not (args.trend_up or args.trend_down):
+    return False
+  grade = GradeEnergyOfTrend(direction)
+  return not getattr(args, 'trend_' + grade)
+
+
+def ReportEnergyOfTrend(direction, count, total_change):
+  arrow = {'up': colors.PaintGreen(UP_ARROW),
+           'down': colors.PaintRed(DOWN_ARROW),
+          }[GradeEnergyOfTrend(direction)]
   return '{} [t={}d]'.format(arrow, count)
 
 
@@ -262,7 +276,14 @@ def main(args):
   def rows():
     for ticker in args.tickers:
       df = fetcher.DataFetcher().FetchData(ticker)
-      trend = ReportEnergyOfTrend(*EnergyOfTrend(df))
+
+      # Trend
+      trend_args = EnergyOfTrend(df)
+      if FilterOutTrend(trend_args[0], args):
+        continue
+      trend = ReportEnergyOfTrend(*trend_args)
+
+      # Momentum
       momentum = ReportEnergyOfMomentum(EnergyOfMomentum(df))
 
       # Cycle
@@ -297,5 +318,7 @@ if __name__ == '__main__':
   parser.add_argument('--cycle-high', action='store_true', help='Filter for tickers in the cycle high range.')
   parser.add_argument('--scale-up', action='store_true', help='Filter for tickers who Scale energy is up.')
   parser.add_argument('--scale-down', action='store_true', help='Filter for tickers who Scale energy is down.')
+  parser.add_argument('--trend-up', action='store_true', help='Filter for tickers who Trend energy is up.')
+  parser.add_argument('--trend-down', action='store_true', help='Filter for tickers who Trend energy is down.')
   args = parser.parse_args()
   main(args)
