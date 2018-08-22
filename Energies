@@ -86,7 +86,7 @@ def EnergyOfTrend(df):
   return TrendAnalysis(df['SMA50'], 1)
 
 
-def GradeEnergyOfTrend(direction):
+def NameDirection(direction):
   if direction < 0:
     return 'down'
   return 'up'
@@ -96,14 +96,13 @@ def FilterOutTrend(direction, args):
   """Determines whether to filter out this Trend value based on args."""
   if not (args.trend_up or args.trend_down):
     return False
-  grade = GradeEnergyOfTrend(direction)
-  return not getattr(args, 'trend_' + grade)
+  return not getattr(args, 'trend_' + NameDirection(direction))
 
 
 def ReportEnergyOfTrend(direction, count, total_change):
   arrow = {'up': colors.PaintGreen(UP_ARROW),
            'down': colors.PaintRed(DOWN_ARROW),
-          }[GradeEnergyOfTrend(direction)]
+          }[NameDirection(direction)]
   return '{} [t={}d]'.format(arrow, count)
 
 
@@ -149,12 +148,14 @@ def ReportEnergyOfCycle(direction, k):
   return '{} [k={}{:.1f}{}]'.format(arrow, color, k, colors.RESET)
 
 
-def FilterOutCycle(k, args):
+def FilterOutCycle(direction, k, args):
   """Determines whether to filter out this Cycle value based on args."""
-  if not (args.cycle_low or args.cycle_medium or args.cycle_high):
-    return False
-  grade = GradeEnergyOfCycle(k)
-  return not getattr(args, 'cycle_' + grade)
+  filter_level = filter_dir = False
+  if any((args.cycle_low, args.cycle_medium, args.cycle_high)):
+    filter_level = not getattr(args, 'cycle_' + GradeEnergyOfCycle(k))
+  if any((args.cycle_up, args.cycle_down)):
+    filter_dir = not getattr(args, 'cycle_' + NameDirection(direction))
+  return filter_level or filter_dir
 
 
 def EnergyOfScale(orig_df, timeframe='W'):
@@ -174,15 +175,9 @@ def EnergyOfScale(orig_df, timeframe='W'):
   return TrendAnalysis(df['MACD'], 2)
 
 
-def GradeEnergyOfScale(direction):
-  if direction < 0:
-    return 'down'
-  return 'up'
-
-
 def ReportEnergyOfScale(direction, count, total_change):
   arrow = {'up': colors.PaintGreen(UP_ARROW),
-           'down': colors.PaintRed(DOWN_ARROW)}[GradeEnergyOfScale(direction)]
+           'down': colors.PaintRed(DOWN_ARROW)}[NameDirection(direction)]
   return '{} [t={:d}w]'.format(arrow, count)
 
 
@@ -190,8 +185,7 @@ def FilterOutScale(direction, args):
   """Determines whether to filter out this Scale value based on args."""
   if not (args.scale_up or args.scale_down):
     return False
-  grade = GradeEnergyOfScale(direction)
-  return not getattr(args, 'scale_' + grade)
+  return not getattr(args, 'scale_' + NameDirection(direction))
 
 
 def Volatility(df):
@@ -287,10 +281,10 @@ def main(args):
       momentum = ReportEnergyOfMomentum(EnergyOfMomentum(df))
 
       # Cycle
-      cycle_direction, cycle_k = EnergyOfCycle(df)
-      if FilterOutCycle(cycle_k, args):
+      cycle_args = EnergyOfCycle(df)
+      if FilterOutCycle(*cycle_args, args):
         continue
-      cycle_report = ReportEnergyOfCycle(cycle_direction, cycle_k)
+      cycle_report = ReportEnergyOfCycle(*cycle_args)
 
       # Scale
       scale_args = EnergyOfScale(df)
@@ -316,6 +310,8 @@ if __name__ == '__main__':
   parser.add_argument('--cycle-low', action='store_true', help='Filter for tickers in the cycle low range.')
   parser.add_argument('--cycle-medium', action='store_true', help='Filter for tickers in the cycle medium range.')
   parser.add_argument('--cycle-high', action='store_true', help='Filter for tickers in the cycle high range.')
+  parser.add_argument('--cycle-up', action='store_true', help='Filter for tickers where Cycle is going up.')
+  parser.add_argument('--cycle-down', action='store_true', help='Filter for tickers where Cycle is going down.')
   parser.add_argument('--scale-up', action='store_true', help='Filter for tickers who Scale energy is up.')
   parser.add_argument('--scale-down', action='store_true', help='Filter for tickers who Scale energy is down.')
   parser.add_argument('--trend-up', action='store_true', help='Filter for tickers who Trend energy is up.')
