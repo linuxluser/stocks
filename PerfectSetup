@@ -45,3 +45,91 @@
 # ... there is no range contraction
 # ... the stock is already up 3-4 days in a row
 
+
+import argparse
+
+import fetcher
+import printing
+
+
+CLOSE  = fetcher.DataSource.CLOSE
+OPEN   = fetcher.DataSource.OPEN
+HIGH   = fetcher.DataSource.HIGH
+LOW    = fetcher.DataSource.LOW
+VOLUME = fetcher.DataSource.VOLUME
+
+
+class ComputedResult(object):
+  """Bag of data to keep the results of some computed values."""
+
+  def __init__(self, **kwargs):
+    self.good = False
+    self.value = None
+    self.print_value = str(self.value)
+    self.print_value_color = str(self.value)
+    self.data = {}
+    for k,v in kwargs.items():
+      setattr(self, k, v)
+
+  def __nonzero__(self):
+    return self.good
+
+
+class ThePerfectSetup(object):
+
+  def __init__(self, ticker):
+    self.ticker = ticker
+    self.df = fetcher.DataFetcher().FetchData(ticker)
+
+  def PreviousUptrend(self):
+    """Previous uptrend."""
+
+  def NearTenDayHigh(self):
+    """Near 10-day high (within 3% of it)."""
+    todays = float(self.df.tail(1)[HIGH])
+    highest = float(self.df.tail(10)[HIGH].max())
+    percent = (todays - highest) / highest
+    result = ComputedResult(good=False,
+                            value=percent,
+                            print_value='{:.1f}%'.format(percent * 100),
+                            print_value_color='{:.1f}%'.format(percent * 100),
+                            data={'todays_highest': todays,
+                                  'ten_day_highest': highest,
+                                  'percent': percent})
+    if percent >= -0.03 and percent <= 0.03:
+      result.good = True
+    return result
+
+  def HighRelativeStrength(self):
+    """High relative strength on weekly, monthly, quarterly or half year basis."""
+
+  def TightConsolidation(self):
+    """Tight side-ways consolidation on below average volume, lasting anywhere between 2 and 20 trading days."""
+
+  def CloseClosingPrices(self):
+    """The closing prices of the past few trading days are very near to each other."""
+
+  def CoiledNearSMAs(self):
+    """Coiled near its 5, 10 or 20-day moving average."""
+
+  def TradingAbove5SMA(self):
+    """Trading above its 5-day moving average."""
+
+  def FiveSMAAbove20SMA(self):
+    """5-day moving average is above its 20-day moving average."""
+
+
+def main(args):
+  headers = ['Ticker', 'Near 10d High']
+  printer = printing.TabularPrinter(headers=headers)
+  rows = []
+  for ticker in args.tickers:
+    ps = ThePerfectSetup(ticker)
+    rows.append((ticker, bool(ps.NearTenDayHigh())))
+  printer.print(rows)
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('tickers', nargs='+')
+  main(parser.parse_args())
