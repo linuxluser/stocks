@@ -1,0 +1,101 @@
+#!/usr/bin/python3
+
+
+import argparse
+import fractions
+
+import npyscreen
+
+import fetcher
+import printing
+
+
+PORTFOLIO = 3600
+LEVERAGE = 3000
+RISK = 0.02
+REWARD = 0.04
+POSITION_SIZE = 0.33
+
+
+class ConfigureApp(npyscreen.NPSApp):
+
+  def main(self):
+    F  = npyscreen.Form(name='Configure Portfolio & Risk Settings')
+    portfolio = F.add(npyscreen.TitleText, name='Portfolio Total:')
+    leverage = F.add(npyscreen.TitleText, name='Leverage Available:')
+    risk = F.add(npyscreen.TitleText, name='Portfolio risk tolerance %:')
+    reward = F.add(npyscreen.TitleText, name='Take profit %:')
+    size = F.add(npyscreen.TitleText, name='Default position size %:')
+    F.edit()
+
+
+def PivotPoints(df):
+  today = df.tail(1)
+  high = today[fetcher.DataSource.HIGH]
+  low = today[fetcher.DataSource.LOW]
+  close = today[fetcher.DataSource.CLOSE]
+  pp = (high + low + close) / 3
+  s1 = (pp * 2) - high
+  s2 = pp - high - low
+  s3 = low - (2 * high) - pp
+
+
+def EntryCalculations(ticker, price, shares):
+  # price
+  price_note = ''
+  if price is None:
+    df = fetcher.DataFetcher().FetchData(ticker)
+    price = float(df.tail(1)[fetcher.DataSource.CLOSE])
+    price_note = ' (Current)'
+
+  # shares
+  if shares is None:
+    position_size = (PORTFOLIO + LEVERAGE)*POSITION_SIZE
+    shares = int(position_size / price)
+  else:
+    position_size = price * shares
+
+  # stoploss/takeprofit
+  stoploss = price*(1 - RISK)
+  takeprofit = price*(1 + REWARD)
+  stoploss_diff = price - stoploss
+  takeprofit_diff = takeprofit - price
+
+  # money totals
+  required_investment = price * shares
+  expected_profit = takeprofit_diff * shares
+  possible_loss = stoploss_diff * shares
+  portfolio_risk = possible_loss / PORTFOLIO
+
+  # risk:reward ratio (RRR)
+  inflated_ratio = round((stoploss_diff/takeprofit_diff)*10)
+  rrr_left = int(10/fractions.gcd(inflated_ratio, 10))
+  rrr_right = int(inflated_ratio/fractions.gcd(inflated_ratio, 10))
+  rr_ratio = '{}:{}'.format(rrr_left, rrr_right)
+
+  # Output
+  printer = printing.TabularPrinter(['Ticker', 'Entry Price', 'Shares', 'Position Size',
+                                     'Risk:Reward', 'StopLoss', 'TakeProfit'])
+  printer.print([[ticker,
+                  '{:.2f}{}'.format(price, price_note),
+                  shares,
+                  '{:.2f}'.format(position_size),
+                  '{}:{}'.format(rrr_left, rrr_right),
+                  '{:.2f}'.format(stoploss),
+                  '{:.2f}'.format(takeprofit)]])
+
+
+def main(args):
+  if args.configure:
+    ConfigureApp().run()
+    return
+  EntryCalculations(args.ticker, args.price, args.shares)
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--configure', action='store_true')
+  parser.add_argument('ticker', default='GOOG', nargs='?')
+  parser.add_argument('price', type=float, nargs='?')
+  parser.add_argument('shares', type=int, nargs='?')
+  main(parser.parse_args())

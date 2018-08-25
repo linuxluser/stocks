@@ -5,7 +5,7 @@ Scripts For Stock Analysis and Tracking
 
 ```bash
 $ sudo apt install at python3-pip
-$ sudo pip3 install beautifulsoup4 numpy pandas==0.21.0 pandas-datareader==0.5.0 requests scipy sh
+$ sudo pip3 install beautifulsoup4 npyscreen numpy pandas==0.21.0 pandas-datareader==0.5.0 requests scipy sh
 ```
 
 ### Get scripts
