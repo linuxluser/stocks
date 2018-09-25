@@ -1,0 +1,48 @@
+#!/usr/bin/python3
+
+import argparse
+import collections
+
+import fetcher
+import printing
+
+
+PivotPoints = collections.namedtuple('PivotPoints', 'ticker s3 s2 s1 pp r1 r2 r3')
+
+
+def CalculatePivotPoints(ticker, df):
+  today = df.tail(1)
+  high = float(today[fetcher.DataSource.HIGH])
+  low = float(today[fetcher.DataSource.LOW])
+  close = float(today[fetcher.DataSource.CLOSE])
+  pp = (high + low + close) / 3
+  r1 = pp   +    (pp   - low)
+  s1 = pp   -    (high - pp)
+  r2 = pp   + (2*(pp   - low))
+  s2 = pp   - (2*(high - pp))
+  r3 = high + (2*(pp   - low))
+  s3 = low  - (2*(high - pp))
+  return PivotPoints(ticker, s3, s2, s1, pp, r1, r2, r3)
+
+
+def main(args):
+  rows = []
+  for ticker in args.tickers:
+    df = fetcher.DataFetcher().FetchData(ticker)
+    p = CalculatePivotPoints(ticker, df)
+    rows.append([p.ticker,
+                 '{:.2f}'.format(p.s3),
+                 '{:.2f}'.format(p.s2),
+                 '{:.2f}'.format(p.s1),
+                 '{:.2f}'.format(p.pp),
+                 '{:.2f}'.format(p.r1),
+                 '{:.2f}'.format(p.r2),
+                 '{:.2f}'.format(p.r3)])
+  printer = printing.TabularPrinter(['Ticker', 'S3', 'S2', 'S1', 'PP', 'R1', 'R2', 'R3'])
+  printer.print(rows)
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('tickers', nargs='+')
+  main(parser.parse_args())
