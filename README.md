@@ -17,7 +17,11 @@ The five energies are:
 *  Support/Resistance
 *  Scale
 
-If this method is interesting to you, be sure to watch [the video presented by Barry Burns](https://www.youtube.com/watch?v=BFMgnarSMuw) on how to use these energies for precisely entering and exiting positions. Once you understand this method more, the `Energies` script here can be useful in help you more quickly identify high-probability opportunities. Once you've narrowed things down with the `Energies` script, you should **always check the actual chart of a security before making a trade.**
+If this method is interesting to you, be sure to watch this video ..
+
+[![A Simple Method for Trading like the Pros](http://img.youtube.com/vi/BFMgnarSMuw/0.jpg)](http://www.youtube.com/watch?v=BFMgnarSMuw "A Simple Method for Trading like the Pros")
+
+The video discusses how to use these energies for precisely entering and exiting positions. Once you understand this method more, the `Energies` script here can be useful in help you more quickly identify high-probability opportunities. Once you've narrowed things down with the `Energies` script, you should **always check the actual chart of a security before making a trade.**
 
 ## Installation
 
