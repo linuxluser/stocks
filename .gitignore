@@ -4,3 +4,6 @@ __pycache__/
 
 # vim swap files
 *.swp
+
+# venv dir
+env/
