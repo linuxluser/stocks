@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+
+
+import argparse
+import optionalpha
+import printing
+
+
+def main(args):
+  headers = ['TICKER', 'IV RANK', 'PRICE']
+  widths = [6, 7, 8]
+  printer = printing.TabularPrinter(headers=headers, widths=widths)
+  watch_list = optionalpha.GetWatchList()
+  def rows():
+    for item in watch_list:
+      yield (item.ticker, item.rank, item.price)
+  printer.print(rows())
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  args = parser.parse_args()
+  main(args)
