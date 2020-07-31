@@ -2,18 +2,35 @@
 
 
 import argparse
+import datetime
+
 import optionalpha
 import printing
 
 
+MEGAPHONE_EMOJI = '\U0001f4e3'
+
+
+def FormatEarnings(earnings_date):
+  if earnings_date is None:
+    return ''
+  today = datetime.date.today()
+  if (earnings_date - today).days < 8:
+    return f'{earnings_date} {MEGAPHONE_EMOJI}'
+  return str(earnings_date)
+
+
 def main(args):
-  headers = ['TICKER', 'IV RANK', 'PRICE']
-  widths = [6, 7, 8]
+  headers = ['TICKER', 'IV RANK', 'PRICE', 'EARNINGS']
+  widths = [6, 7, 8, 12]
   printer = printing.TabularPrinter(headers=headers, widths=widths)
   watch_list = optionalpha.GetWatchList()
   def rows():
     for item in watch_list:
-      yield (item.ticker, item.rank, item.price)
+      yield (item.ticker,
+             item.rank,
+             item.price,
+             FormatEarnings(item.earnings_date))
   printer.print(rows())
 
 

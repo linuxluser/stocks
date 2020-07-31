@@ -5,6 +5,7 @@ The optionalpha.com watch list is updated daily so we can cache a daily version 
 """
 
 
+import datetime
 import getpass
 from html.parser import HTMLParser
 import os
@@ -28,10 +29,11 @@ WL_CREATION_OFFSET = 23 * 60 * 60  # 6pm EST
 
 class WatchlistItem(object):
 
-  def __init__(self, ticker, price, rank):
+  def __init__(self, ticker, price, rank, earnings_date):
     self.ticker = ticker
     self.price = price
     self.rank = rank
+    self.earnings_date = earnings_date
 
 
 class WatchListParser(HTMLParser):
@@ -40,8 +42,18 @@ class WatchListParser(HTMLParser):
     super().__init__()
     self.__in_name_h1 = False
     self.__in_stockprice_span = False
-    self.current_data = {}
+    self.__in_earningcornercontainer_div = False
+    self.__in_popup_date_div = False
     self.watch_list = []
+    self._reset_current_data()
+
+  def _reset_current_data(self):
+    self.current_data = {
+        'ticker': None,
+        'price': None,
+        'rank': None,
+        'earnings_date': None,
+    }
 
   def handle_starttag(self, tag, attrs):
     if tag == 'h1':
@@ -54,21 +66,35 @@ class WatchListParser(HTMLParser):
         self.__in_stockprice_span = True
     elif tag == 'div':
       attrs = dict(attrs)
-      if 'class' in attrs and attrs['class'] == 'bar-percentage':
-        self.current_data['rank'] = int(attrs['data-percentage'])
-        self.watch_list.append(WatchlistItem(**self.current_data))
+      if 'class' in attrs:
+        if attrs['class'] == 'earningcornercontainer':
+          self.__in_earningcornercontainer_div = True
+        elif attrs['class'] == 'popup-date' and self.__in_earningcornercontainer_div:
+          self.__in_popup_date_div = True
+          self.__in_earningcornercontainer_div = False
+        elif attrs['class'] == 'bar-percentage':
+          self.current_data['rank'] = int(attrs['data-percentage'])
+          self.watch_list.append(WatchlistItem(**self.current_data))
+          self._reset_current_data()
 
   def handle_endtag(self, tag):
     if self.__in_name_h1 and tag == 'h1':
       self.__in_name_h1 = False
     if self.__in_stockprice_span and tag == 'span':
       self.__in_stockprice_span = False
+    if self.__in_popup_date_div and tag == 'div':
+      self.__in_popup_date_div = False
 
   def handle_data(self, data):
     if self.__in_name_h1:
       self.current_data['ticker'] = data.strip()
     elif self.__in_stockprice_span:
       self.current_data['price'] = float(data.strip())
+    elif self.__in_popup_date_div:
+      data = data.strip()
+      if data:
+        month, day, year = map(int, data.split('/', 2))
+        self.current_data['earnings_date'] = datetime.date(year, month, day)
 
 
 class WatchListFetcher(object):
@@ -84,7 +110,11 @@ class WatchListFetcher(object):
 def WatchListToYAML(watch_list):
   D = {}
   for item in watch_list:
-    D[item.ticker] = {'price': item.price, 'rank': item.rank}
+    D[item.ticker] = {
+        'price': item.price,
+        'rank': item.rank,
+        'earnings_date': item.earnings_date,
+    }
   return yaml.safe_dump({'WatchList': D})
 
 
@@ -92,7 +122,8 @@ def YAMLToWatchList(S):
   watch_list = []
   obj = yaml.safe_load(S)
   for ticker,v in obj['WatchList'].items():
-    watch_list.append(WatchlistItem(ticker, v['price'], v['rank']))
+    item = WatchlistItem(ticker, v.get('price'), v.get('rank'), v.get('earnings_date'))
+    watch_list.append(item)
   watch_list.sort(key=lambda x: (x.rank, x.ticker))
   return watch_list
 
