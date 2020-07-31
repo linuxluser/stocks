@@ -29,21 +29,28 @@ WL_CREATION_OFFSET = 23 * 60 * 60  # 6pm EST
 
 class WatchlistItem(object):
 
-  def __init__(self, ticker, price, rank, earnings_date):
+  def __init__(self, ticker, price, rank, earnings_date, expected_ranges):
     self.ticker = ticker
     self.price = price
     self.rank = rank
     self.earnings_date = earnings_date
+    self.expected_ranges = expected_ranges
 
 
 class WatchListParser(HTMLParser):
 
   def __init__(self):
     super().__init__()
+    self.__in_oagrid_item_li = False  # main "card" element
+    self.__oagrid_item_li_counter = 0
     self.__in_name_h1 = False
     self.__in_stockprice_span = False
     self.__in_earningcornercontainer_div = False
+    self.__in_ranges_div = False
+    self.__in_ranges_h3 = False
+    self.__in_ranges_h4 = False
     self.__in_popup_date_div = False
+    self.__expected_ranges_key = ''
     self.watch_list = []
     self._reset_current_data()
 
@@ -53,10 +60,27 @@ class WatchListParser(HTMLParser):
         'price': None,
         'rank': None,
         'earnings_date': None,
+        'expected_ranges': {
+            'day': (None, None),
+            'week': (None, None),
+            'month': (None, None),
+        },
     }
 
   def handle_starttag(self, tag, attrs):
-    if tag == 'h1':
+    if tag == 'li':
+      attrs = dict(attrs)
+      if 'class' in attrs and 'oagrid-item' in attrs['class']:
+        self.__oagrid_item_li_counter += 1  # count number of <li>
+        self.__in_oagrid_item_li = True
+
+        ##### SAVE
+        # Save current data as WatchListItem and clear it for new data
+        if self.__oagrid_item_li_counter > 1:
+          self.watch_list.append(WatchlistItem(**self.current_data))
+          self._reset_current_data()
+
+    elif tag == 'h1':
       attrs = dict(attrs)
       if 'class' in attrs and attrs['class'] == 'name':
         self.__in_name_h1 = True
@@ -66,24 +90,40 @@ class WatchListParser(HTMLParser):
         self.__in_stockprice_span = True
     elif tag == 'div':
       attrs = dict(attrs)
-      if 'class' in attrs:
-        if attrs['class'] == 'earningcornercontainer':
-          self.__in_earningcornercontainer_div = True
-        elif attrs['class'] == 'popup-date' and self.__in_earningcornercontainer_div:
-          self.__in_popup_date_div = True
-          self.__in_earningcornercontainer_div = False
-        elif attrs['class'] == 'bar-percentage':
-          self.current_data['rank'] = int(attrs['data-percentage'])
-          self.watch_list.append(WatchlistItem(**self.current_data))
-          self._reset_current_data()
+      if 'class' not in attrs:
+        return
+      if attrs['class'] == 'ranges':
+        self.__in_ranges_div = True
+      if attrs['class'] == 'earningcornercontainer':
+        self.__in_earningcornercontainer_div = True
+      elif attrs['class'] == 'popup-date' and self.__in_earningcornercontainer_div:
+        self.__in_popup_date_div = True
+        self.__in_earningcornercontainer_div = False
+      elif attrs['class'] == 'bar-percentage':
+        self.current_data['rank'] = int(attrs['data-percentage'])
+    if self.__in_ranges_div:
+      if tag == 'h4':
+        self.__in_ranges_h4 = True
+      elif tag == 'h3':
+        self.__in_ranges_h3 = True
 
   def handle_endtag(self, tag):
+    if self.__in_oagrid_item_li and tag == 'li':
+      self.__in_oagrid_item_li = False
     if self.__in_name_h1 and tag == 'h1':
       self.__in_name_h1 = False
     if self.__in_stockprice_span and tag == 'span':
       self.__in_stockprice_span = False
     if self.__in_popup_date_div and tag == 'div':
       self.__in_popup_date_div = False
+    if self.__in_ranges_div and tag == 'div':
+      self.__in_ranges_div = False
+      self.__in_ranges_h4 = False
+      self.__in_ranges_h3 = False
+    if self.__in_ranges_h4 and tag == 'h4':
+      self.__in_ranges_h4 = False
+    if self.__in_ranges_h3 and tag == 'h3':
+      self.__in_ranges_h3 = False
 
   def handle_data(self, data):
     if self.__in_name_h1:
@@ -95,7 +135,20 @@ class WatchListParser(HTMLParser):
       if data:
         month, day, year = map(int, data.split('/', 2))
         self.current_data['earnings_date'] = datetime.date(year, month, day)
-
+    elif self.__in_ranges_h4:
+      if '1 day' in data.lower():
+        self.__expected_ranges_key = 'day'
+      elif '1 week' in data.lower():
+        self.__expected_ranges_key = 'week'
+      elif '1 month' in data.lower():
+        self.__expected_ranges_key = 'month'
+    elif self.__in_ranges_h3:
+      # TODO: Better locale-aware currency parsing
+      lower, upper = data.split('-')
+      lower = float(lower.replace('$', '').replace(',', '').strip())
+      upper = float(upper.replace('$', '').replace(',', '').strip())
+      key = self.__expected_ranges_key
+      self.current_data['expected_ranges'][key] = (lower, upper)
 
 class WatchListFetcher(object):
 
@@ -114,15 +167,20 @@ def WatchListToYAML(watch_list):
         'price': item.price,
         'rank': item.rank,
         'earnings_date': item.earnings_date,
+        'expected_ranges': item.expected_ranges,
     }
-  return yaml.safe_dump({'WatchList': D})
+  return yaml.safe_dump({'WatchList': D}, explicit_start=True, default_flow_style=False)
 
 
 def YAMLToWatchList(S):
   watch_list = []
   obj = yaml.safe_load(S)
   for ticker,v in obj['WatchList'].items():
-    item = WatchlistItem(ticker, v.get('price'), v.get('rank'), v.get('earnings_date'))
+    item = WatchlistItem(ticker=ticker,
+                         price=v.get('price'),
+                         rank=v.get('rank'),
+                         earnings_date=v.get('earnings_date'),
+                         expected_ranges=v.get('expected_ranges'))
     watch_list.append(item)
   watch_list.sort(key=lambda x: (x.rank, x.ticker))
   return watch_list
