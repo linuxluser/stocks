@@ -227,8 +227,8 @@ def _SaveToCache(watch_list):
     f.write(WatchListToYAML(watch_list))
 
 
-def GetWatchList():
-  if _IsCacheExpired():
+def GetWatchList(live=False):
+  if live or _IsCacheExpired():
     fetcher = WatchListFetcher(GetOptionAlphaSession())
     page = fetcher.FetchWatchListPage()
     parser = WatchListParser()

@@ -38,7 +38,7 @@ def main(args):
     headers.insert(3, 'EXPECTED DAY RANGE')
     widths.insert(3, EXPECTED_RANGE_WIDTH)
   printer = printing.TabularPrinter(headers=headers, widths=widths)
-  watch_list = optionalpha.GetWatchList()
+  watch_list = optionalpha.GetWatchList(live=args.live)
   show_high = show_mid = show_low = True
   if any((args.highrank, args.midrank, args.lowrank)):
     show_high = args.highrank
@@ -76,6 +76,7 @@ if __name__ == '__main__':
   parser.add_argument('--midrank', '-m', action='store_true', help='Display mid-IV rank (30-50).')
   parser.add_argument('--highrank', '-h', action='store_true', help='Display high-IV rank (50-100).')
   parser.add_argument('--allranges', '-a', action='store_true', help='Display day, week and month expected ranges.')
+  parser.add_argument('--live', action='store_true', help='Fetch live results (skip cache).')
   parser.add_argument('--help', action='help', help='show this help message and exit')
   args = parser.parse_args()
   main(args)
