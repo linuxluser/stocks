@@ -4,6 +4,7 @@
 import argparse
 import datetime
 
+import colors
 import optionalpha
 import printing
 
@@ -27,10 +28,16 @@ def main(args):
   watch_list = optionalpha.GetWatchList()
   def rows():
     for item in watch_list:
-      yield (item.ticker,
-             item.rank,
-             item.price,
-             FormatEarnings(item.earnings_date))
+      if item.rank < 30:
+        paint = colors.PaintLightRed
+      elif item.rank >= 30 and item.rank < 50:
+        paint = colors.PaintLightYellow
+      else:
+        paint = colors.PaintLightCyan
+      yield (paint(item.ticker),
+             paint(item.rank),
+             paint(item.price),
+             paint(FormatEarnings(item.earnings_date)))
   printer.print(rows())
 
 
