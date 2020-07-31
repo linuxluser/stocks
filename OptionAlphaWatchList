@@ -10,6 +10,7 @@ import printing
 
 
 MEGAPHONE_EMOJI = '\U0001f4e3'
+EXPECTED_RANGE_WIDTH = 21
 
 
 def FormatEarnings(earnings_date):
@@ -21,9 +22,16 @@ def FormatEarnings(earnings_date):
   return str(earnings_date)
 
 
+def FormatExpectedRange(lower, upper):
+  lower_str = '${:.2f}'.format(lower)
+  upper_str = '${:.2f}'.format(upper)
+  pad_size = EXPECTED_RANGE_WIDTH - 2 - len(lower_str) - len(upper_str)
+  return '[{}{}{}]'.format(lower_str, '-'.center(pad_size), upper_str)
+
+
 def main(args):
-  headers = ['TICKER', 'IV RANK', 'PRICE', 'EARNINGS']
-  widths = [6, 7, 8, 12]
+  headers = ['TICKER', 'IV RANK', 'PRICE', 'EXPECTED MONTH RANGE', 'EARNINGS']
+  widths = [6, 7, 8, EXPECTED_RANGE_WIDTH, 12]
   printer = printing.TabularPrinter(headers=headers, widths=widths)
   watch_list = optionalpha.GetWatchList()
   def rows():
@@ -37,6 +45,7 @@ def main(args):
       yield (paint(item.ticker),
              paint(item.rank),
              paint(item.price),
+             paint(FormatExpectedRange(*item.expected_ranges['month'])),
              paint(FormatEarnings(item.earnings_date)))
   printer.print(rows())
 
