@@ -32,6 +32,11 @@ def FormatExpectedRange(lower, upper):
 def main(args):
   headers = ['TICKER', 'IV RANK', 'PRICE', 'EXPECTED MONTH RANGE', 'EARNINGS']
   widths = [6, 7, 7, EXPECTED_RANGE_WIDTH, 12]
+  if args.allranges:
+    headers.insert(3, 'EXPECTED WEEK RANGE')
+    widths.insert(3, EXPECTED_RANGE_WIDTH)
+    headers.insert(3, 'EXPECTED DAY RANGE')
+    widths.insert(3, EXPECTED_RANGE_WIDTH)
   printer = printing.TabularPrinter(headers=headers, widths=widths)
   watch_list = optionalpha.GetWatchList()
   show_high = show_mid = show_low = True
@@ -53,11 +58,15 @@ def main(args):
         if not show_high:
           continue
         paint = colors.PaintLightCyan
-      yield (paint(item.ticker),
-             paint(item.rank),
-             paint('{:.2f}'.format(item.price)),
-             paint(FormatExpectedRange(*item.expected_ranges['month'])),
-             paint(FormatEarnings(item.earnings_date)))
+      line = [paint(item.ticker),
+              paint(item.rank),
+              paint('{:.2f}'.format(item.price)),
+              paint(FormatExpectedRange(*item.expected_ranges['month'])),
+              paint(FormatEarnings(item.earnings_date))]
+      if args.allranges:
+        line.insert(3, paint(FormatExpectedRange(*item.expected_ranges['week'])))
+        line.insert(3, paint(FormatExpectedRange(*item.expected_ranges['day'])))
+      yield line
   printer.print(rows())
 
 
@@ -66,6 +75,7 @@ if __name__ == '__main__':
   parser.add_argument('--lowrank', '-l', action='store_true', help='Display low-IV rank (0-30).')
   parser.add_argument('--midrank', '-m', action='store_true', help='Display mid-IV rank (30-50).')
   parser.add_argument('--highrank', '-h', action='store_true', help='Display high-IV rank (50-100).')
+  parser.add_argument('--allranges', '-a', action='store_true', help='Display day, week and month expected ranges.')
   parser.add_argument('--help', action='help', help='show this help message and exit')
   args = parser.parse_args()
   main(args)
