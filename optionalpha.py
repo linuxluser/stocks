@@ -67,6 +67,14 @@ class WatchListParser(HTMLParser):
         },
     }
 
+  def _parseEarningsDate(self, data):
+    try:
+      month, day, year = map(int, data.split('/', 2))
+    except ValueError:
+      return None
+    else:
+      return datetime.date(year, month, day)
+
   def handle_starttag(self, tag, attrs):
     if tag == 'li':
       attrs = dict(attrs)
@@ -133,8 +141,7 @@ class WatchListParser(HTMLParser):
     elif self.__in_popup_date_div:
       data = data.strip()
       if data:
-        month, day, year = map(int, data.split('/', 2))
-        self.current_data['earnings_date'] = datetime.date(year, month, day)
+        self.current_data['earnings_date'] = self._parseEarningsDate(data)
     elif self.__in_ranges_h4:
       if '1 day' in data.lower():
         self.__expected_ranges_key = 'day'
