@@ -193,18 +193,20 @@ def YAMLToWatchList(S):
   return watch_list
 
 
-def GetOptionAlphaSession():
-  if os.path.exists(COOKIEJAR_PATH):
-    with open(COOKIEJAR_PATH, 'rb') as f:
-      session = pickle.load(f)
-    # TODO: check for expired session
-  else:
-    session = requests.Session()
-    login = input('   Login: ')
-    password = getpass.getpass('Password: ')
-    session.post(LOGIN_URL, data={'log': login, 'pwd': password})
-    with open(COOKIEJAR_PATH, 'wb') as f:
-      pickle.dump(session, f)
+def GetOptionAlphaSession(force_login):
+  if os.path.exists(COOKIEJAR_PATH) and not force_login:
+    now = time.time()
+    mtime = os.path.getmtime(COOKIEJAR_PATH)
+    if (now - mtime) < (ONE_DAY * 2):
+      with open(COOKIEJAR_PATH, 'rb') as f:
+        session = pickle.load(f)
+      return session
+  session = requests.Session()
+  login = input('   Login: ')
+  password = getpass.getpass('Password: ')
+  session.post(LOGIN_URL, data={'log': login, 'pwd': password})
+  with open(COOKIEJAR_PATH, 'wb') as f:
+    pickle.dump(session, f)
   return session
 
 
@@ -234,9 +236,9 @@ def _SaveToCache(watch_list):
     f.write(WatchListToYAML(watch_list))
 
 
-def GetWatchList(live=False):
+def GetWatchList(live=False, force_login=False):
   if live or _IsCacheExpired():
-    fetcher = WatchListFetcher(GetOptionAlphaSession())
+    fetcher = WatchListFetcher(GetOptionAlphaSession(force_login))
     page = fetcher.FetchWatchListPage()
     parser = WatchListParser()
     parser.feed(page)
