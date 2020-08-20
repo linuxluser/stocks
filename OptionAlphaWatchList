@@ -46,6 +46,11 @@ def main(args):
     show_low = args.lowrank
   def rows():
     for item in watch_list:
+      # If a list of tickers was given, only show those
+      if args.tickers and item.ticker not in args.tickers:
+        continue
+
+      # Selectively show and paint according to rank level
       if item.rank < 30:
         if not show_low:
           continue
@@ -58,6 +63,8 @@ def main(args):
         if not show_high:
           continue
         paint = colors.PaintLightCyan
+
+      # Create output line
       line = [paint(item.ticker),
               paint(item.rank),
               paint('{:.2f}'.format(item.price)),
@@ -72,6 +79,7 @@ def main(args):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(add_help=False)
+  parser.add_argument('tickers', nargs='*', help='Display only these tickers off the watch-list.')
   parser.add_argument('--lowrank', '-l', action='store_true', help='Display low-IV rank (0-30).')
   parser.add_argument('--midrank', '-m', action='store_true', help='Display mid-IV rank (30-50).')
   parser.add_argument('--highrank', '-h', action='store_true', help='Display high-IV rank (50-100).')
