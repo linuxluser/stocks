@@ -1,0 +1,349 @@
+#!/usr/bin/python3
+
+"""Parse the exported "CSV" formated file of positions from Thinkorswim.
+
+
+To get the file, open Thinkorswim, then:
+  1. Click "Monitor" tab.
+  2. Click "Activity and Positions" sub-tab.
+  3. Click the option menu on the "Position Statement" section
+  4. Click "Export to file ..."
+
+
+The main goal is to show P/L of positions and how close we are to our max profit/loss
+for option strategies ("Goal%"). But in order to do this, I parse as much useful
+information as I can out of the file and construct a single, large dataset, keyed by
+each ticker. It should be possible to do many other helpful things with this dataset,
+but I'll leave that for another day when I can break this out into a library with more
+functionality.
+"""
+
+
+import argparse
+import csv
+import datetime
+import io
+import itertools
+import pprint
+
+
+UPPERCASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+BEAR_EMOJI = '\U0001f43b'
+BULL_EMOJI = '\U0001f402'
+CONDOR_EMOJI = '\U0001f985'
+
+
+def _NumberSign(number):
+  if number < 0:
+    return -1
+  return 1
+
+
+def _FormatStrikes(*strikes):
+  strs = []
+  for s in sorted(strikes):
+    if s.is_integer():
+      strs.append(str(int(s)))
+    else:
+      strs.append('{:.1f}'.format(s))
+  return '/'.join(strs)
+
+
+def ConvertDollarsToFloat(dollars):
+  dollars = dollars.strip()
+  # Determine if it's a positive or negative amount
+  pos_neg = 1
+  if '(' in dollars:
+    pos_neg = -1
+
+  # strip out symbols, convert and return
+  stripped = dollars.strip('()').replace('$', '').replace(',', '')
+  return float(stripped) * pos_neg
+
+
+def ParseContract(contract):
+  """
+  Examples:
+    100 16 OCT 20 13 PUT
+    100 (Weeklys) 23 OCT 20 220 CALL
+  """
+  controlling, tail = contract.split(None, 1)
+  dt_str, strike, contract_type = tail.rsplit(None, 2)
+  is_weekly = False
+  if 'eeklys' in dt_str:
+    is_weekly = True
+    dt_str = dt_str.replace('(Weeklys) ', '')
+  dt = datetime.datetime.strptime(dt_str, '%d %b %y')
+  return {'Controlling': int(controlling),
+          'Expiration': datetime.date(dt.year, dt.month, dt.day),
+          'Strike': float(strike),
+          'Weeklys': is_weekly,
+          'Type': contract_type,
+          'Description': contract}
+
+
+def GetVerticalStrategy(op0, op1):
+  op0_sign = _NumberSign(op0['Qty'])
+  op1_sign = _NumberSign(op1['Qty'])
+  qty = abs(op0['Qty'])
+  cost = (op0['Trade Price'] * op0_sign) + (op1['Trade Price'] * op1_sign)
+  premium = abs(cost)  # cost of contracts in absolute terms
+  width = abs(op0['Strike'] - op1['Strike'])
+  strikes = _FormatStrikes(op0['Strike'], op1['Strike'])
+
+  # Compute Delta
+  delta = None
+  if None not in (op0.get('Delta'), op1.get('Delta')):
+    delta = op0['Delta'] + op1['Delta']
+
+  op_type = op0['Type']
+  expire_str = '{:%b %d}'.format(op0['Expiration'])
+  if op0['Weeklys']:
+    expire_str += ' (wk)'
+  if cost < 0:
+    desc = f'SELL -{qty} VERTICAL {expire_str} {strikes} {op_type} @{premium:.2f}'
+    max_profit = premium * qty * 100
+    max_loss = (width - premium) * qty * 100
+    if op_type == 'PUT':
+      sentiment = 'BULLISH'
+    else:
+      sentiment = 'BEARISH'
+  else:
+    desc = f'BUY +{qty} VERTICAL {expire_str} {strikes} {op_type} @{premium:.2f}'
+    max_profit = (width - premium) * qty * 100
+    max_loss = premium * qty * 100
+    if op_type == 'CALL':
+      sentiment = 'BULLISH'
+    else:
+      sentiment = 'BEARISH'
+  pl = op0['P/L'] + op1['P/L']
+  pl_goal_pct = 0.0
+  if pl < 0 and max_loss:
+    pl_goal_pct = pl/max_loss
+  elif max_profit:
+    pl_goal_pct = pl/max_profit
+  mark = (op0['Mark'] * op0_sign) + (op1['Mark'] * op1_sign)
+  return {
+    'Strategy': desc,
+    'Sentiment': sentiment,
+    'Strategy Type': 'VERTICAL',
+    'Cost': cost,
+    'Premium': premium,
+    'Mark': mark,
+    'Delta': delta,
+    'Max Profit': max_profit,
+    'Max Loss': max_loss,
+    'P/L': pl,
+    'P/L Goal %': pl_goal_pct,
+    'Qty': qty,
+  }
+
+def GetIronCondorStrategy(put_op0, put_op1, call_op0, call_op1):
+  contracts = put_op0, put_op1, call_op0, call_op1
+  p = GetVerticalStrategy(put_op0, put_op1)
+  c = GetVerticalStrategy(call_op0, call_op1)
+  pl = c['P/L'] + p['P/L']
+  max_profit = c['Max Profit'] + p['Max Profit']
+  max_loss = c['Max Loss'] + p['Max Loss']
+  pl_goal_pct = 0.0
+  cost = c['Cost'] + p['Cost']
+  premium = abs(cost)
+  qty = abs(call_op0['Qty'])
+
+  # Compute Delta
+  delta = None
+  if None not in map(lambda x: x['Delta'], contracts):
+    delta = sum(map(lambda x: x['Delta'], contracts))
+
+  strikes = _FormatStrikes(put_op0['Strike'], put_op1['Strike'], call_op0['Strike'], call_op1['Strike'])
+  expire_str = '{:%b %d}'.format(call_op0['Expiration'])
+  if call_op0['Weeklys']:
+    expire_str += ' (wk)'
+  if pl < 0 and max_loss:
+    pl_goal_pct = pl/max_loss
+  elif max_profit:
+    pl_goal_pct = pl/max_profit
+  if cost < 0:
+    desc = f'SELL -{qty} IRON CONDOR {expire_str} {strikes} PUT/CALL @{premium:.2f}'
+  else:
+    desc = f'BUY +{qty} IRON CONDOR {expire_str} {strikes} PUT/CALL @{premium:.2f}'
+  return {
+    'Strategy': desc,
+    'Strategy Type': 'IRON CONDOR',
+    'Sentiment': 'NEUTRAL',
+    'Cost': cost,
+    'Premium': premium,
+    'Mark': c['Mark'],
+    'Delta': delta,
+    'Max Profit': max_profit,
+    'Max Loss': max_loss,
+    'P/L': pl,
+    'P/L Goal %': pl_goal_pct,
+    'Qty': qty,
+  }
+
+
+def GroupOptionsAsStrategies(ticker, options):
+  """Determine the strategies employed based on the options held.
+
+  Do the silly logic involved in translating the options held into terms
+  that define an options strategy (spreads, Iron condors, calendars, etc).
+  """
+  strategies = []
+
+  # Group by expiration date
+  options = sorted(options, key=lambda op: op['Expiration'])
+  for expire, op_group in itertools.groupby(options, lambda op: op['Expiration']):
+    op_group = list(op_group)
+    trade_price = 0.0
+    calls = [x for x in op_group if x['Type'] == 'CALL']
+    puts = [x for x in op_group if x['Type'] == 'PUT']
+
+    # Vertical spreads
+    if len(op_group) == 2:
+      strategies.append(GetVerticalStrategy(op_group[0], op_group[1]))
+
+    # Iron Condor
+    if len(calls) == 2 and len(puts) == 2:
+      strategies.append(GetIronCondorStrategy(*puts, *calls))
+
+    # TODO: Straddle/Strangle
+    # TODO: Calendar
+    # TODO: Covered Call
+    # TODO: Naked PUT/CALL
+
+  return strategies
+
+
+def GetPositions(filename):
+
+  # 1. Parse out relevent lines
+  block_lines = []
+  lines = []
+  with open(filename) as f:
+    for line in f:
+      if ',' not in line:
+        continue
+
+      # The header for a new block
+      if line.startswith('Instrument'):
+        if lines:
+          block_lines.append(lines)
+          lines = []
+
+      # End of what we care about
+      if 'Cash & Sweep Vehicle' in line:
+        block_lines.append(lines)
+        lines = []
+        break
+
+      lines.append(line)
+
+  # 2. Read in lines to form structured data (list of dicts)
+  data_lines = []
+  for lines in block_lines:
+    block = io.StringIO(''.join(lines))
+    reader = csv.DictReader(block)
+    data_lines.extend(list(reader))
+
+  # 3. Group related data together as a position
+  positions = {}
+  ticker = ''
+  company = ''
+  options = []
+  for dl in data_lines:
+    identifier = dl['Instrument']
+
+    # Ticker
+    if all(c in UPPERCASE for c in identifier):
+      if ticker:
+        positions[ticker] = {'Options': options,
+                             'Strategies': GroupOptionsAsStrategies(ticker, options),
+                             'Company': company}
+        options = []
+        company = ''
+      ticker = identifier
+
+    # Option
+    elif 'CALL' in identifier or 'PUT' in identifier:
+      contract = ParseContract(identifier)
+      try:
+        delta = float(dl.get('Delta'))
+      except TypeError:
+        delta = None
+      contract.update({
+          'Mark': float(dl['Mark']),
+          'P/L': ConvertDollarsToFloat(dl['P/L Open']),
+          'Qty': int(dl['Qty']),
+          'Delta': delta,
+          'Trade Price': float(dl['Trade Price']),
+      })
+      options.append(contract)
+
+    # Company name
+    else:
+      company = identifier
+
+  # 4. Group by strategies
+  positions[ticker] = {'Options': options,
+                       'Strategies': GroupOptionsAsStrategies(ticker, options),
+                       'Company': company}
+  return positions
+
+
+def main(args):
+  positions = GetPositions(args.filename)
+
+  # Dump dataset and exit if --debug given
+  if args.debug:
+    pprint.pprint(positions)
+    return
+
+  # Print header (or not)
+  if not args.noheader:
+    print('TICKER       P/L     Goal%       Strategy')
+    print('-'*80)
+
+  # Output position status, line by line
+  pl_total = delta_total = 0
+  neutral_count = bullish_count = bearish_count = 0
+  for ticker in sorted(positions.keys()):
+    for s in positions[ticker]['Strategies']:
+      pl_total += s['P/L']
+      delta_total += s['Delta']
+      goal_pct = int(s['P/L Goal %'] * 100)
+      pl = '{:.2f}'.format(s['P/L'])
+      if s['Sentiment'] == 'NEUTRAL':
+        strategy = '{} {}'.format(CONDOR_EMOJI, s['Strategy'])
+        neutral_count += 1
+      elif s['Sentiment'] == 'BULLISH':
+        strategy = '{} {}'.format(BULL_EMOJI, s['Strategy'])
+        bullish_count += 1
+      else:
+        strategy = '{} {}'.format(BEAR_EMOJI, s['Strategy'])
+        bearish_count += 1
+      print('{:<8} {:>8}    {:>3}      {}'.format(ticker, pl, goal_pct, strategy))
+
+  # Print Balance
+  print('\n')
+  print('PORTFOLIO BALANCE')
+  print('-'*80)
+  print(f'Delta: {delta_total:.2f}')
+  print(f'Bullish positions: {bullish_count}')
+  print(f'Bearish positions: {bearish_count}')
+  print(f'Neutral positions: {neutral_count}')
+
+  # Print Totals
+  print('\n')
+  print('PROFIT/LOSS')
+  print('-'*80)
+  print(f'P/L Total: ${pl_total:.2f}')
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('filename')
+  parser.add_argument('--debug', action='store_true', help='Dump Python dataset to stdout and exit.')
+  parser.add_argument('--noheader', action='store_true')
+  args = parser.parse_args()
+  main(args)
