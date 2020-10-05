@@ -291,8 +291,29 @@ def GetPositions(filename):
   return positions
 
 
+def GetAccountStatements(filename):
+  """Get account statement lines.
+  """
+  keys = (
+      'Cash & Sweep Vehicle',
+      'OVERALL P/L YTD',
+      'BP ADJUSTMENT',
+      'OVERNIGHT FUTURES BP',
+      'AVAILABLE DOLLARS',
+  )
+  values = []
+  with open(filename) as f:
+    for line in f:
+      for key in keys:
+        if line.startswith(key):
+          _, rhs = line.split(',', 1)
+          values.append((key, rhs.strip().strip('"')))
+  return values
+
+
 def main(args):
   positions = GetPositions(args.filename)
+  acct_statements = GetAccountStatements(args.filename)
 
   # Dump dataset and exit if --debug given
   if args.debug:
@@ -337,7 +358,14 @@ def main(args):
   print('\n')
   print('PROFIT/LOSS')
   print('-'*80)
-  print(f'P/L Total: ${pl_total:.2f}')
+  print(f'P/L Positions Total: ${pl_total:.2f}')
+
+  # Print account statement lines
+  print('\n')
+  print('ACCOUNT')
+  print('-'*80)
+  for key,value in acct_statements:
+    print(f'{key:<20}: {value}')
 
 
 if __name__ == '__main__':
