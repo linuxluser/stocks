@@ -246,7 +246,7 @@ def GetPositions(filename):
     reader = csv.DictReader(block)
     data_lines.extend(list(reader))
 
-  # 3. Group related data together as a position
+  # 3.a Group related data together as a position
   positions = {}
   ticker = ''
   company = ''
@@ -257,9 +257,7 @@ def GetPositions(filename):
     # Ticker
     if all(c in UPPERCASE for c in identifier):
       if ticker:
-        positions[ticker] = {'Options': options,
-                             'Strategies': GroupOptionsAsStrategies(ticker, options),
-                             'Company': company}
+        positions[ticker] = {'Options': options, 'Company': company}
         options = []
         company = ''
       ticker = identifier
@@ -284,10 +282,14 @@ def GetPositions(filename):
     else:
       company = identifier
 
+  # 3.b Get last one
+  positions[ticker]['Options'].extend(options)
+
   # 4. Group by strategies
-  positions[ticker] = {'Options': options,
-                       'Strategies': GroupOptionsAsStrategies(ticker, options),
-                       'Company': company}
+  for ticker, data in positions.items():
+    strategies = GroupOptionsAsStrategies(ticker, positions[ticker]['Options'])
+    positions[ticker]['Strategies'] = strategies
+
   return positions
 
 
