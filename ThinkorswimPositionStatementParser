@@ -283,7 +283,10 @@ def GetPositions(filename):
       company = identifier
 
   # 3.b Get last one
-  positions[ticker]['Options'].extend(options)
+  if ticker in positions:
+    positions[ticker]['Options'].extend(options)
+  else:
+    positions[ticker] = {'Options': options, 'Company': company}
 
   # 4. Group by strategies
   for ticker, data in positions.items():
