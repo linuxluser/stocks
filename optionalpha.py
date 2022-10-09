@@ -11,13 +11,14 @@ from html.parser import HTMLParser
 import os
 import pathlib
 import pickle
+import re
 import requests
 import time
 import yaml
 
 
-LOGIN_URL = 'https://optionalpha.com/wp-login.php'
-WATCHLIST_URL = 'https://optionalpha.com/members/watch-list'
+LOGIN_URL = 'https://legacy.optionalpha.com/wp-login.php'
+WATCHLIST_URL = 'https://legacy.optionalpha.com/members/watch-list'
 COOKIEJAR_PATH = os.path.join(pathlib.Path.home(), '.oawl_cookies')
 CACHE_PATH = os.path.join(pathlib.Path.home(), '.oawl_cache')
 
@@ -25,6 +26,9 @@ CACHE_PATH = os.path.join(pathlib.Path.home(), '.oawl_cache')
 ONE_DAY = 24 * 60 * 60
 TM_WEEKENDS = (5, 6, 0)  # Saturday, Sunday and Monday
 WL_CREATION_OFFSET = 23 * 60 * 60  # 6pm EST
+
+# Regexes
+USD_PRICE_RE = re.compile(r'\$-?[0-9]+\.?[0-9]*')  # $-0.7, $10, $15.67
 
 
 class WatchlistItem(object):
@@ -151,11 +155,15 @@ class WatchListParser(HTMLParser):
         self.__expected_ranges_key = 'month'
     elif self.__in_ranges_h3:
       # TODO: Better locale-aware currency parsing
-      lower, upper = data.split('-')
+      prices = USD_PRICE_RE.findall(data)
+      if len(prices) != 2:
+        raise ValueError(f'Found a strange string I couldn\'t parse: "{data}"')
+      lower, upper = prices
       lower = float(lower.replace('$', '').replace(',', '').strip())
       upper = float(upper.replace('$', '').replace(',', '').strip())
       key = self.__expected_ranges_key
       self.current_data['expected_ranges'][key] = (lower, upper)
+
 
 class WatchListFetcher(object):
 
